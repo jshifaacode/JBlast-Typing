@@ -12,19 +12,23 @@ const UI = (() => {
   }
 
   function buildAvatarGrid() {
-    const avatars = ['⚡','💀','🔥','👾','🤖','🦾','🧬','💥','🛸','🔮','🌀','⚔️'];
-    const grid = document.getElementById('avatarGrid');
-    if (!grid) return;
-    grid.innerHTML = avatars.map((a, i) => `
-      <div class="avatar-option${i === 0 ? ' selected' : ''}" data-avatar="${a}">${a}</div>
-    `).join('');
-    grid.querySelectorAll('.avatar-option').forEach(opt => {
-      opt.addEventListener('click', () => {
-        grid.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
-        opt.classList.add('selected');
-      });
+  const avatars = ['⚡','💀','🔥','👾','🤖','🦾','🧬','💥','🛸','🔮','🌀','⚔️'];
+  const grid = document.getElementById('avatarGrid');
+  if (!grid) return;
+
+  grid.innerHTML = avatars.map((a, i) => `
+    <div class="avatar-item${i === 0 ? ' selected' : ''}" data-avatar="${a}">
+      ${a}
+    </div>
+  `).join('');
+
+  grid.querySelectorAll('.avatar-item').forEach(opt => {
+    opt.addEventListener('click', () => {
+      grid.querySelectorAll('.avatar-item').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
     });
-  }
+  });
+}
 
   function buildSkinOptions() {
     const skins = [
