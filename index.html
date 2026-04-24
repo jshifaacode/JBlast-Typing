@@ -584,6 +584,33 @@ input[type="text"]:focus {
   50% { box-shadow: 0 0 20px var(--purple), 0 0 40px var(--purple); }
 }
 
+/* 🔥 FIX TOUCH MOBILE */
+.avatar-item {
+  touch-action: manipulation;
+  min-width: 60px;
+  min-height: 60px;
+}
+
+.avatar-item:active {
+  transform: scale(0.92);
+}
+
+
+#bg-canvas,
+#particle-canvas,
+#grid-floor,
+#scanlines,
+#noise,
+#vignette {
+  pointer-events: none !important;
+}
+
+
+#screen-login {
+  pointer-events: auto;
+}
+
+
 /* ============================================================
    MULTIPLAYER SCREEN
    ============================================================ */
@@ -1473,6 +1500,7 @@ input[type="text"]:focus {
   };
 })();
 </script>
+
 
 <script src="js/audio.js"></script>
 <script src="js/words.js"></script>
