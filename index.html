@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>JBlast Typing — Type to Survive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="scanlines"></div>
+<div id="noise"></div>
+<canvas id="bg-canvas"></canvas>
+
+<div id="app">
+
+  <div id="screen-boot" class="screen active">
+    <div class="boot-container">
+      <div class="logo-wrap">
+        <div class="logo-glitch" data-text="KEYSTORM">KEYSTORM</div>
+        <div class="logo-sub">TYPE TO SURVIVE</div>
+      </div>
+      <div class="boot-lines" id="bootLines"></div>
+      <button class="btn-primary" id="btnEnterGame">INITIALIZE SYSTEM</button>
+    </div>
+  </div>
+
+  <div id="screen-login" class="screen">
+    <div class="panel-center">
+      <div class="panel-title">IDENTITY PROTOCOL</div>
+      <div class="form-group">
+        <label>CALLSIGN</label>
+        <input type="text" id="inputUsername" placeholder="Enter your name..." maxlength="16" autocomplete="off">
+      </div>
+      <div class="avatar-select">
+        <label>SELECT AVATAR</label>
+        <div class="avatar-grid" id="avatarGrid"></div>
+      </div>
+      <div class="skin-select">
+        <label>TYPING EFFECT</label>
+        <div class="skin-options" id="skinOptions"></div>
+      </div>
+      <button class="btn-primary" id="btnConfirmLogin">CONFIRM IDENTITY</button>
+    </div>
+  </div>
+
+  <div id="screen-menu" class="screen">
+    <div class="menu-header">
+      <div class="player-hud">
+        <div class="player-avatar-display" id="menuAvatar"></div>
+        <div class="player-info-display">
+          <div class="player-name-display" id="menuUsername">PLAYER</div>
+          <div class="player-xp-bar"><div class="xp-fill" id="xpFill"></div></div>
+          <div class="player-level" id="menuLevel">LVL 1</div>
+        </div>
+      </div>
+      <div class="player-stats-mini">
+        <div class="stat-item"><span id="statWpm">0</span><small>WPM</small></div>
+        <div class="stat-item"><span id="statAcc">0%</span><small>ACC</small></div>
+        <div class="stat-item"><span id="statWins">0</span><small>WINS</small></div>
+      </div>
+    </div>
+
+    <div class="menu-nav">
+      <button class="menu-btn" id="btnSolo">
+        <div class="menu-btn-icon">⚔️</div>
+        <div class="menu-btn-title">SOLO MISSION</div>
+        <div class="menu-btn-desc">Face the AI horde alone</div>
+      </button>
+      <button class="menu-btn featured" id="btnMultiplayer">
+        <div class="menu-btn-icon">🔥</div>
+        <div class="menu-btn-title">KEYSTORM ARENA</div>
+        <div class="menu-btn-desc">Battle real players</div>
+        <div class="badge">MULTIPLAYER</div>
+      </button>
+      <button class="menu-btn" id="btnStats">
+        <div class="menu-btn-icon">📊</div>
+        <div class="menu-btn-title">WAR RECORDS</div>
+        <div class="menu-btn-desc">Your combat history</div>
+      </button>
+    </div>
+  </div>
+
+  <div id="screen-multiplayer" class="screen">
+    <div class="panel-center wide">
+      <button class="btn-back" id="btnBackFromMP">← BACK</button>
+      <div class="panel-title">KEYSTORM ARENA</div>
+      <div class="mp-options">
+        <div class="mp-card" id="mpCreate">
+          <div class="mp-card-icon">🏠</div>
+          <div class="mp-card-title">CREATE ROOM</div>
+          <div class="mp-card-desc">Host a private match</div>
+          <button class="btn-secondary" id="btnCreateRoom">CREATE</button>
+        </div>
+        <div class="mp-divider">OR</div>
+        <div class="mp-card" id="mpJoin">
+          <div class="mp-card-icon">🚀</div>
+          <div class="mp-card-title">JOIN ROOM</div>
+          <div class="mp-card-desc">Enter room code</div>
+          <input type="text" id="inputRoomCode" placeholder="ENTER CODE..." maxlength="6" style="text-transform:uppercase">
+          <button class="btn-secondary" id="btnJoinRoom">JOIN</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-lobby" class="screen">
+    <div class="lobby-container">
+      <div class="room-code-display">
+        <small>ROOM CODE</small>
+        <div class="room-code" id="lobbyCode">AX7K9</div>
+        <button class="btn-copy" id="btnCopyCode">COPY</button>
+      </div>
+      <div class="lobby-players" id="lobbyPlayers"></div>
+      <div class="lobby-status" id="lobbyStatus">Waiting for players...</div>
+      <button class="btn-primary" id="btnStartMatch" style="display:none">START MATCH</button>
+      <button class="btn-back" id="btnLeaveLobby">LEAVE ROOM</button>
+    </div>
+  </div>
+
+  <div id="screen-game" class="screen">
+    <div class="game-hud-top">
+      <div class="hp-bars" id="hpBars"></div>
+      <div class="game-info">
+        <div class="timer-display" id="gameTimer">00:00</div>
+        <div class="wave-display" id="waveDisplay">WAVE 1</div>
+      </div>
+    </div>
+
+    <div class="game-arena">
+      <div class="enemy-zone" id="enemyZone"></div>
+
+      <div class="combo-display" id="comboDisplay" style="display:none">
+        <span id="comboText">COMBO x1</span>
+      </div>
+
+      <div class="skill-bar" id="skillBar">
+        <button class="skill-btn" id="skillOverdrive" data-skill="overdrive" disabled>
+          <span class="skill-icon">⚡</span>
+          <span class="skill-name">OVERDRIVE</span>
+          <div class="skill-cooldown" id="cdOverdrive"></div>
+        </button>
+        <button class="skill-btn" id="skillFreeze" data-skill="freeze" disabled>
+          <span class="skill-icon">❄️</span>
+          <span class="skill-name">FREEZE</span>
+          <div class="skill-cooldown" id="cdFreeze"></div>
+        </button>
+        <button class="skill-btn" id="skillBurn" data-skill="burn" disabled>
+          <span class="skill-icon">🔥</span>
+          <span class="skill-name">BURN</span>
+          <div class="skill-cooldown" id="cdBurn"></div>
+        </button>
+      </div>
+    </div>
+
+    <div class="typing-zone">
+      <div class="target-word-container">
+        <div class="target-word" id="targetWord"></div>
+        <div class="typing-indicators" id="typingIndicators"></div>
+      </div>
+      <div class="input-zone">
+        <input type="text" id="gameInput" class="game-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="START TYPING...">
+        <div class="input-stats">
+          <span id="liveWpm">0 WPM</span>
+          <span id="liveAcc">100%</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="mobileKeyboard" class="mobile-keyboard" style="display:none"></div>
+
+    <div class="multiplayer-sidebar" id="mpSidebar" style="display:none">
+      <div class="sidebar-title">LIVE BATTLE</div>
+      <div id="mpPlayerList"></div>
+    </div>
+  </div>
+
+  <div id="screen-result" class="screen">
+    <div class="result-container">
+      <div class="result-title" id="resultTitle">MISSION COMPLETE</div>
+      <div class="result-rank" id="resultRank">S</div>
+      <div class="result-stats">
+        <div class="result-stat"><label>WPM</label><span id="rWpm">0</span></div>
+        <div class="result-stat"><label>ACCURACY</label><span id="rAcc">0%</span></div>
+        <div class="result-stat"><label>MAX COMBO</label><span id="rCombo">0</span></div>
+        <div class="result-stat"><label>SCORE</label><span id="rScore">0</span></div>
+        <div class="result-stat"><label>XP EARNED</label><span id="rXp">+0</span></div>
+      </div>
+      <div class="result-buttons">
+        <button class="btn-primary" id="btnPlayAgain">PLAY AGAIN</button>
+        <button class="btn-secondary" id="btnBackToMenu">MAIN MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screen-stats" class="screen">
+    <div class="panel-center wide">
+      <button class="btn-back" id="btnBackFromStats">← BACK</button>
+      <div class="panel-title">WAR RECORDS</div>
+      <div class="stats-grid" id="statsGrid"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="damage-overlay"></div>
+<div id="toast-container"></div>
+
+<footer id="global-footer">
+  <span class="footer-text">crafted by <span class="footer-name">jayshifa banyuwana</span></span>
+</footer>
+
+<script src="js/audio.js"></script>
+<script src="js/words.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/multiplayer.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
