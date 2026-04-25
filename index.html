@@ -1506,27 +1506,29 @@ const Game = (() => {
     const baseDmg=Math.floor((20+comboDmg)*dmgMult);
 
     if(state.mode==='multiplayer'){
-      const healAmt=Math.floor(baseDmg*0.4);
+      const healAmt=Math.min(8,Math.floor(baseDmg*0.15));
       state.playerHp=Math.min(state.maxPlayerHp,state.playerHp+healAmt);
       renderHpBars();
-      showHealNumber(healAmt);
+      if(healAmt>0)showHealNumber(healAmt);
       Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(),state.playerHp);
       const opponents=Multiplayer.getPlayers().filter(p=>p.id!==Multiplayer.getPlayerId()&&(p.hp||0)>0);
       if(opponents.length>0){
         const target=opponents[Math.floor(Math.random()*opponents.length)];
         const newHp=Math.max(0,(target.hp||100)-baseDmg);
         Multiplayer.updatePlayerHp(target.id,newHp);
-        Effects.showToast(`⚔️ -${baseDmg} HP to ${target.name}! +${healAmt} HP you`,'info',1500);
+        Effects.showToast(`⚔️ -${baseDmg} HP ke ${target.name}! +${healAmt} HP kamu`,'info',1500);
       }
     }else{
       const activeEnemies=state.enemies.filter(e=>e.hp>0);
       if(activeEnemies.length>0){
         const target=activeEnemies[Math.floor(Math.random()*activeEnemies.length)];
         damageEnemy(target,baseDmg);
-        const healAmt=Math.floor(baseDmg*0.3);
-        state.playerHp=Math.min(state.maxPlayerHp,state.playerHp+healAmt);
-        renderHpBars();
-        showHealNumber(healAmt);
+        const healAmt=Math.min(6,Math.floor(baseDmg*0.1));
+        if(healAmt>0){
+          state.playerHp=Math.min(state.maxPlayerHp,state.playerHp+healAmt);
+          renderHpBars();
+          showHealNumber(healAmt);
+        }
       }
     }
 
@@ -1577,7 +1579,11 @@ const Game = (() => {
 
   function onWaveClear(){
     state.wave++;state.score+=100*state.wave;
-    Effects.showToast(`✅ WAVE ${state.wave-1} CLEARED! +${100*(state.wave-1)} SCORE`,'success');
+    const waveHeal=15;
+    state.playerHp=Math.min(state.maxPlayerHp,state.playerHp+waveHeal);
+    renderHpBars();
+    showHealNumber(waveHeal);
+    Effects.showToast(`✅ WAVE ${state.wave-1} CLEARED! +${100*(state.wave-1)} SCORE  ❤️+${waveHeal}`,'success');
     Audio.victory();
     state.enemies.forEach(e=>{clearTimeout(e.attackTimer);if(e.burnTick)clearInterval(e.burnTick);});
     if(state.wave>6)endGame(true);
