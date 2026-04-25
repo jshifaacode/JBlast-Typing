@@ -8,9 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-/* =============================================
-   RESET & ROOT
-============================================= */
+
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
 :root{
   --cyan:#00f5ff;--cyan2:rgba(0,245,255,0.15);
@@ -986,20 +984,8 @@ const Effects = (() => {
   return {spawnParticle,spawnBurst,screenShake,damageFlash,showDamageNumber,killEffect,comboEffect,typeEffect,showToast};
 })();
 
-/* ==============================================
-   MULTIPLAYER — Firebase Realtime Database
-   ============================================
-   SETUP (GRATIS, 5 MENIT):
-   1. Buka https://console.firebase.google.com
-   2. Buat project → Realtime Database → Create Database
-      → pilih region → "Start in test mode"
-   3. Salin URL database (https://xxx-default-rtdb.firebaseio.com)
-   4. Ganti FIREBASE_URL di bawah dengan URL kamu
-   5. Di Firebase Console → Realtime Database → Rules → Publish:
-      { "rules": { "rooms": { "$r": { ".read":true, ".write":true } } } }
-=============================================== */
-const FIREBASE_URL = 'https://YOUR-PROJECT-default-rtdb.firebaseio.com';
-// ↑↑↑ WAJIB DIGANTI DENGAN URL FIREBASE KAMU ↑↑↑
+
+const FIREBASE_URL = 'https://jblast-typing-default-rtdb.firebaseio.com/';
 
 const Multiplayer = (() => {
   let currentRoom=null,playerId=null,isHost=false,players={},callbacks={};
