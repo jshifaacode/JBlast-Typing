@@ -1503,16 +1503,51 @@ const Game = (() => {
     Audio.wordComplete();Effects.comboEffect(state.combo);Audio.comboUp(state.combo);updateComboDisplay();
     const dmgMult=state.skills.overdrive.active?2:1;
     const comboDmg=Math.min(state.combo,10)*2;
-    const activeEnemies=state.enemies.filter(e=>e.hp>0);
-    if(activeEnemies.length>0){
-      const target=activeEnemies[Math.floor(Math.random()*activeEnemies.length)];
-      damageEnemy(target,Math.floor((20+comboDmg)*dmgMult));
+    const baseDmg=Math.floor((20+comboDmg)*dmgMult);
+
+    if(state.mode==='multiplayer'){
+      const healAmt=Math.floor(baseDmg*0.4);
+      state.playerHp=Math.min(state.maxPlayerHp,state.playerHp+healAmt);
+      renderHpBars();
+      showHealNumber(healAmt);
+      Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(),state.playerHp);
+      const opponents=Multiplayer.getPlayers().filter(p=>p.id!==Multiplayer.getPlayerId()&&(p.hp||0)>0);
+      if(opponents.length>0){
+        const target=opponents[Math.floor(Math.random()*opponents.length)];
+        const newHp=Math.max(0,(target.hp||100)-baseDmg);
+        Multiplayer.updatePlayerHp(target.id,newHp);
+        Effects.showToast(`⚔️ -${baseDmg} HP to ${target.name}! +${healAmt} HP you`,'info',1500);
+      }
+    }else{
+      const activeEnemies=state.enemies.filter(e=>e.hp>0);
+      if(activeEnemies.length>0){
+        const target=activeEnemies[Math.floor(Math.random()*activeEnemies.length)];
+        damageEnemy(target,baseDmg);
+        const healAmt=Math.floor(baseDmg*0.3);
+        state.playerHp=Math.min(state.maxPlayerHp,state.playerHp+healAmt);
+        renderHpBars();
+        showHealNumber(healAmt);
+      }
     }
+
     state.score+=(10+comboDmg)*dmgMult;
     if(state.combo>=3&&state.combo%3===0)unlockSkill();
     const allDead=state.enemies.every(e=>e.hp<=0);
     if(allDead)onWaveClear();
     else setTimeout(nextWord,200);
+  }
+
+  function showHealNumber(amount){
+    const hpEl=document.querySelector('.hp-bar-fill.player');
+    if(!hpEl)return;
+    const num=document.createElement('div');
+    num.style.cssText='position:fixed;font-family:"Press Start 2P",monospace;font-size:11px;color:#00ff88;text-shadow:0 0 10px #00ff88;pointer-events:none;z-index:9000;animation:dmgPop .9s ease-out forwards;';
+    const rect=hpEl.getBoundingClientRect();
+    num.style.left=(rect.left+rect.width/2)+'px';
+    num.style.top=(rect.top-10)+'px';
+    num.textContent='+'+amount+' HP';
+    document.body.appendChild(num);
+    setTimeout(()=>num.remove(),900);
   }
 
   function damageEnemy(enemy,amount){
@@ -1699,7 +1734,12 @@ const Game = (() => {
       updateMpSidebar();
       if(!state.running)return;
       const myId=Multiplayer.getPlayerId();
-      if(pid===myId)return;
+      if(pid===myId){
+        state.playerHp=hp;
+        renderHpBars();
+        if(hp<=0)endMultiplayerRound(false);
+        return;
+      }
       const allPlayers=Multiplayer.getPlayers();
       const opponents=allPlayers.filter(p=>p.id!==myId);
       const allOpponentsDead=opponents.length>0&&opponents.every(p=>(p.hp||0)<=0);
