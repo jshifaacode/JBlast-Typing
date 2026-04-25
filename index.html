@@ -537,6 +537,12 @@ body{
 .result-xp{font-family:'Press Start 2P',monospace;font-size:11px;color:var(--green);text-shadow:0 0 14px rgba(0,255,136,.5);margin:10px 0;letter-spacing:2px;}
 .result-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;width:100%;max-width:500px;}
 
+.mp-result-box{background:var(--card);border:1px solid var(--border2);padding:14px;}
+.mp-result-title{font-family:'Press Start 2P',monospace;font-size:7px;color:var(--text-dim);letter-spacing:2px;margin-bottom:10px;text-align:center;}
+.mp-result-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:10px;color:var(--text-mid);}
+.mp-result-row:last-child{border-bottom:none;}
+.mp-result-winner{color:var(--yellow);font-weight:bold;text-shadow:0 0 10px rgba(255,230,0,.5);}
+
 /* =============================================
    SCREEN: STATS
 ============================================= */
@@ -638,6 +644,10 @@ body.overdrive .typing-zone{border-color:var(--yellow);box-shadow:0 0 20px rgba(
       <div class="mini-stat"><span class="val" id="statAcc">0%</span><span class="lbl">ACC</span></div>
       <div class="mini-stat"><span class="val" id="statWins">0</span><span class="lbl">WINS</span></div>
     </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:8px;">
+    <button class="btn-back" id="btnEditProfile" style="flex:1;text-align:center;">✏️ EDIT PROFILE</button>
+    <button class="btn-back" id="btnLogout" style="flex:1;text-align:center;color:var(--red);border-color:rgba(255,34,85,.3);">⏻ LOGOUT</button>
   </div>
   <div class="sec-label">MISSION SELECT</div>
   <div class="menu-cards">
@@ -755,6 +765,7 @@ body.overdrive .typing-zone{border-color:var(--yellow);box-shadow:0 0 20px rgba(
     <div class="result-stat-box"><span class="result-stat-val" id="rScore">0</span><span class="result-stat-lbl">SCORE</span></div>
   </div>
   <div class="result-xp px" id="rXp">+0 XP</div>
+  <div id="mpResultInfo" style="display:none;width:100%;max-width:500px;margin:10px 0;"></div>
   <div class="result-btns">
     <button class="btn" id="btnPlayAgain">PLAY AGAIN</button>
     <button class="btn purple" id="btnBackToMenu">MAIN MENU</button>
@@ -1259,7 +1270,7 @@ const Multiplayer = (() => {
 =============================================== */
 const Game = (() => {
   let state = {
-    mode:'solo',wave:1,score:0,playerHp:100,maxPlayerHp:100,combo:0,maxCombo:0,
+    mode:'solo',wave:1,score:0,playerHp:150,maxPlayerHp:150,combo:0,maxCombo:0,
     totalChars:0,correctChars:0,wrongChars:0,startTime:null,wordStartTime:null,
     currentWord:'',displayWord:'',typedIndex:0,enemies:[],running:false,paused:false,
     gameTimer:0,timerInterval:null,attackInterval:null,
@@ -1268,19 +1279,19 @@ const Game = (() => {
   };
 
   const ENEMIES = [
-    {id:'bot',   name:'ROGUE BOT',    avatar:'🤖',maxHp:80, phase:1,attackDmg:10,attackDelay:5000},
-    {id:'virus', name:'VIRUS.EXE',    avatar:'🦠',maxHp:120,phase:1,attackDmg:15,attackDelay:4000},
-    {id:'boss',  name:'SYSTEM BOSS',  avatar:'💀',maxHp:300,phase:1,attackDmg:25,attackDelay:3000,isBoss:true},
-    {id:'glitch',name:'GLITCH_GHOST', avatar:'👾',maxHp:100,phase:1,attackDmg:12,attackDelay:4500},
-    {id:'phantom',name:'PHANTOM.SYS', avatar:'🕷️',maxHp:200,phase:1,attackDmg:20,attackDelay:3500}
+    {id:'bot',   name:'ROGUE BOT',    avatar:'🤖',maxHp:80, phase:1,attackDmg:8, attackDelay:7000},
+    {id:'virus', name:'VIRUS.EXE',    avatar:'🦠',maxHp:120,phase:1,attackDmg:12,attackDelay:6000},
+    {id:'boss',  name:'SYSTEM BOSS',  avatar:'💀',maxHp:300,phase:1,attackDmg:18,attackDelay:5000,isBoss:true},
+    {id:'glitch',name:'GLITCH_GHOST', avatar:'👾',maxHp:100,phase:1,attackDmg:10,attackDelay:6500},
+    {id:'phantom',name:'PHANTOM.SYS', avatar:'🕷️',maxHp:200,phase:1,attackDmg:15,attackDelay:5500}
   ];
 
   function init(mode,skin,firstWord){
     state.mode=mode;state.skin=skin||'default';state.wave=1;state.score=0;
-    state.playerHp=100;state.maxPlayerHp=100;state.combo=0;state.maxCombo=0;
+    state.playerHp=150;state.maxPlayerHp=150;state.combo=0;state.maxCombo=0;
     state.totalChars=0;state.correctChars=0;state.wrongChars=0;
-    state.startTime=Date.now();state.running=true;state.gameTimer=0;state.enemies=[];
-    state._firstWord=firstWord||null; // kata pertama dari Firebase (agar semua player dapat kata sama)
+    state.startTime=Date.now();state.running=false;state.gameTimer=0;state.enemies=[];
+    state._firstWord=firstWord||null;
     Object.keys(state.skills).forEach(k=>{state.skills[k].active=false;state.skills[k].cooldown=0;});
     ['Overdrive','Freeze','Burn'].forEach(sk=>{
       const btn=document.getElementById('skill'+sk);
@@ -1288,7 +1299,26 @@ const Game = (() => {
       const cd=document.getElementById('cd'+sk);
       if(cd)cd.style.transform='scaleX(0)';
     });
-    spawnWave();startTimers();renderHpBars();
+    showCountdown(()=>{
+      state.running=true;
+      spawnWave();startTimers();renderHpBars();
+    });
+  }
+
+  function showCountdown(cb){
+    const zone=document.getElementById('enemyZone');
+    if(zone)zone.innerHTML='<div id="countdownOverlay" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:100px;"></div>';
+    const overlay=document.getElementById('countdownOverlay');
+    const nums=['3','2','1','GO!'];
+    let i=0;
+    function tick(){
+      if(!overlay)return;
+      if(i>=nums.length){overlay.parentElement&&(overlay.parentElement.innerHTML='');cb();return;}
+      overlay.innerHTML=`<div style="font-family:'Press Start 2P',monospace;font-size:clamp(40px,10vw,72px);color:${i===3?'var(--green)':'var(--cyan)'};text-shadow:0 0 30px var(--glow-c);animation:resultIn .3s cubic-bezier(.22,1,.36,1) both;">${nums[i]}</div>`;
+      i++;
+      setTimeout(tick,i<=3?900:500);
+    }
+    tick();
   }
 
   function spawnWave(){
@@ -1337,7 +1367,40 @@ const Game = (() => {
     const card=document.getElementById('enemy-'+enemy.id);
     if(card){const f=document.createElement('div');f.className='enemy-attack-flash';card.appendChild(f);setTimeout(()=>f.remove(),200);}
     if(state.multiplayer)Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(),state.playerHp);
-    if(state.playerHp<=0)endGame(false);
+    if(state.playerHp<=0){
+      if(state.multiplayer){
+        endMultiplayerRound(false);
+      }else{
+        endGame(false);
+      }
+    }
+  }
+
+  function endMultiplayerRound(iWon){
+    if(!state.running)return;
+    state.running=false;
+    clearInterval(state.timerInterval);
+    state.enemies.forEach(e=>{clearTimeout(e.attackTimer);if(e.burnTick)clearInterval(e.burnTick);});
+    Multiplayer.stopBots();
+    const wpm=calculateWPM();
+    const acc=calculateAccuracy();
+    const players=Multiplayer.getPlayers();
+    const myId=Multiplayer.getPlayerId();
+    let winnerId=null;
+    if(iWon){
+      winnerId=myId;
+    }else{
+      const alive=players.filter(p=>p.id!==myId&&(p.hp||0)>0);
+      if(alive.length===1)winnerId=alive[0].id;
+      else if(alive.length>1){
+        const top=alive.reduce((a,b)=>(a.hp||0)>(b.hp||0)?a:b);
+        winnerId=top.id;
+      }
+    }
+    if(iWon)Audio.victory();else Audio.defeat();
+    setTimeout(()=>{
+      UI.showResult({victory:iWon,wpm,accuracy:acc,maxCombo:state.maxCombo,score:state.score,mpWinner:winnerId,mpPlayers:players});
+    },800);
   }
 
   function nextWord(){
@@ -1398,7 +1461,7 @@ const Game = (() => {
       if(state.typedIndex>=state.currentWord.length)onWordComplete();
     }else{
       state.wrongChars++;state.combo=0;updateComboDisplay();
-      const dmg=5;state.playerHp=Math.max(0,state.playerHp-dmg);renderHpBars();
+      const dmg=2;state.playerHp=Math.max(0,state.playerHp-dmg);renderHpBars();
       Audio.keyError();Effects.screenShake(4,150);
       input.classList.add('wrong-char');setTimeout(()=>input.classList.remove('wrong-char'),200);
       const charEl=document.querySelector(`[data-i="${state.typedIndex}"]`);
@@ -1427,7 +1490,7 @@ const Game = (() => {
       if(state.typedIndex>=state.currentWord.length)onWordComplete();
     }else{
       state.wrongChars++;state.combo=0;updateComboDisplay();
-      const dmg=5;state.playerHp=Math.max(0,state.playerHp-dmg);renderHpBars();
+      const dmg=2;state.playerHp=Math.max(0,state.playerHp-dmg);renderHpBars();
       Audio.keyError();Effects.screenShake(3,120);
       if(state.playerHp<=0){endGame(false);return;}
     }
@@ -1631,7 +1694,18 @@ const Game = (() => {
       const p=Multiplayer.getPlayers().find(p=>p.id===pid);
       if(p)Effects.showToast(`${p.avatar||''} ${p.name} completed the word!`,'info');
     });
-    Multiplayer.on('hp_update',()=>updateMpSidebar());
+    Multiplayer.on('hp_update',({playerId:pid,hp})=>{
+      updateMpSidebar();
+      if(!state.running)return;
+      const myId=Multiplayer.getPlayerId();
+      if(pid===myId)return;
+      const allPlayers=Multiplayer.getPlayers();
+      const opponents=allPlayers.filter(p=>p.id!==myId);
+      const allOpponentsDead=opponents.length>0&&opponents.every(p=>(p.hp||0)<=0);
+      if(allOpponentsDead){
+        endMultiplayerRound(true);
+      }
+    });
     updateMpSidebar();
   }
 
@@ -1658,7 +1732,7 @@ const Game = (() => {
   }
 
   function getState(){return{...state};}
-  return{init,handleInput,handleVirtualKey,activateSkill,getState,endGame,setupMultiplayer};
+  return{init,handleInput,handleVirtualKey,activateSkill,getState,endGame,endMultiplayerRound,setupMultiplayer};
 })();
 
 /* ==============================================
@@ -1726,14 +1800,14 @@ const UI = (() => {
     grid.innerHTML=items.map(i=>`<div class="stat-card"><span class="sv">${i.v}</span><span class="sl">${i.l}</span></div>`).join('');
   }
 
-  function showResult({victory,wpm,accuracy,maxCombo,score}){
-    // Compute rank
-    let rank='F';
-    if(wpm>=120&&accuracy>=98)rank='S';
-    else if(wpm>=90&&accuracy>=95)rank='A';
-    else if(wpm>=70&&accuracy>=90)rank='B';
-    else if(wpm>=50&&accuracy>=80)rank='C';
-    else if(wpm>=30)rank='D';
+  function showResult({victory,wpm,accuracy,maxCombo,score,mpWinner,mpPlayers}){
+    let rank='D';
+    if(wpm>=80&&accuracy>=95)rank='S';
+    else if(wpm>=55&&accuracy>=88)rank='A';
+    else if(wpm>=35&&accuracy>=78)rank='B';
+    else if(wpm>=20&&accuracy>=65)rank='C';
+    else if(wpm>=10||accuracy>=50)rank='D';
+    else rank='F';
     // XP
     const xpEarned=wpm*2+maxCombo*5+(victory?100:20);
     // Update profile
@@ -1749,13 +1823,24 @@ const UI = (() => {
     App.saveProfile(p);
     // Render
     const el=n=>document.getElementById(n);
-    if(el('resultTitle')){el('resultTitle').textContent=victory?'MISSION COMPLETE':'MISSION FAILED';el('resultTitle').className='result-banner '+(victory?'win':'lose');}
+    let titleText=victory?'MISSION COMPLETE':'MISSION FAILED';
+    if(mpWinner){titleText=victory?'🏆 YOU WIN!':'💀 YOU LOSE';}
+    if(el('resultTitle')){el('resultTitle').textContent=titleText;el('resultTitle').className='result-banner '+(victory?'win':'lose');}
     if(el('resultRank')){el('resultRank').textContent=rank;el('resultRank').className='result-rank rank-'+rank;}
     if(el('rWpm'))el('rWpm').textContent=wpm;
     if(el('rAcc'))el('rAcc').textContent=accuracy+'%';
     if(el('rCombo'))el('rCombo').textContent=maxCombo;
     if(el('rScore'))el('rScore').textContent=score;
     if(el('rXp'))el('rXp').textContent='+'+xpEarned+' XP';
+    const mpEl=el('mpResultInfo');
+    if(mpEl){
+      if(mpWinner&&mpPlayers&&mpPlayers.length>0){
+        const winner=mpPlayers.find(p=>p.id===mpWinner);
+        const rows=mpPlayers.map(p=>`<div class="mp-result-row ${p.id===mpWinner?'mp-result-winner':''}">${p.id===mpWinner?'🏆 ':''}<span>${p.avatar||'⚡'} ${p.name}</span><span>${Math.floor(p.hp||0)} HP</span></div>`).join('');
+        mpEl.innerHTML='<div class="mp-result-box"><div class="mp-result-title">BATTLE RESULTS</div>'+rows+'</div>';
+        mpEl.style.display='block';
+      }else{mpEl.style.display='none';}
+    }
     showScreen('screen-result');
   }
 
@@ -1895,6 +1980,34 @@ const App = (() => {
     // Nav back
     $('btnBackFromMP').addEventListener('click',()=>UI.showScreen('screen-menu'));
     $('btnBackFromStats').addEventListener('click',()=>UI.showScreen('screen-menu'));
+
+    $('btnEditProfile').addEventListener('click',()=>{
+      Audio.keyPress();
+      const p=getProfile();
+      UI.showScreen('screen-login');
+      UI.buildAvatarGrid();
+      UI.buildSkinOptions();
+      const inp=$('inputUsername');
+      if(inp)inp.value=p.name||'';
+      setTimeout(()=>{
+        const curAvatar=document.querySelector(`.avatar-item[data-avatar="${p.avatar}"]`);
+        if(curAvatar){document.querySelectorAll('.avatar-item').forEach(o=>o.classList.remove('selected'));curAvatar.classList.add('selected');}
+        const curSkin=document.querySelector(`.skin-option[data-skin="${p.skin}"]`);
+        if(curSkin){document.querySelectorAll('.skin-option').forEach(o=>o.classList.remove('selected'));curSkin.classList.add('selected');}
+      },50);
+    });
+
+    $('btnLogout').addEventListener('click',()=>{
+      Audio.keyPress();
+      if(confirm('Logout and clear your profile?')){
+        localStorage.removeItem('keystorm_profile');
+        profile=null;
+        UI.showScreen('screen-login');
+        UI.buildAvatarGrid();
+        UI.buildSkinOptions();
+        $('inputUsername').value='';
+      }
+    });
 
     // Multiplayer — async karena Firebase
     $('btnCreateRoom').addEventListener('click',async()=>{
