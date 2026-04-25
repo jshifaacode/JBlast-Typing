@@ -1,29 +1,5 @@
-/**
- * multiplayer.js — Real-time multiplayer via Firebase Realtime Database
- *
- * HOW TO SET UP (FREE):
- * 1. Buka https://console.firebase.google.com
- * 2. Buat project baru (misal: "keystorm-game")
- * 3. Klik "Realtime Database" → Create Database → pilih region → "Start in test mode"
- * 4. Salin URL database kamu (bentuknya: https://xxx-default-rtdb.firebaseio.com)
- * 5. Ganti nilai FIREBASE_URL di bawah ini dengan URL kamu
- * 6. Upload semua file ke Netlify seperti biasa
- *
- * Rules Firebase (Database Rules) — paste ini di Firebase Console > Rules:
- * {
- *   "rules": {
- *     "rooms": {
- *       "$roomId": {
- *         ".read": true,
- *         ".write": true
- *       }
- *     }
- *   }
- * }
- */
+const FIREBASE_URL = 'https://jblast-typing-default-rtdb.firebaseio.com/';
 
-const FIREBASE_URL = 'https://YOUR-PROJECT-default-rtdb.firebaseio.com';
-// ↑↑↑ GANTI DENGAN URL FIREBASE KAMU ↑↑↑
 
 const Multiplayer = (() => {
   let currentRoom = null;
@@ -31,7 +7,7 @@ const Multiplayer = (() => {
   let isHost = false;
   let players = {};
   let callbacks = {};
-  let listeners = []; // untuk cleanup
+  let listeners = []; 
   let botIntervals = [];
   let presenceRef = null;
 
