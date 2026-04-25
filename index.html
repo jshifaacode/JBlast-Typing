@@ -1279,11 +1279,11 @@ const Game = (() => {
   };
 
   const ENEMIES = [
-    {id:'bot',   name:'ROGUE BOT',    avatar:'🤖',maxHp:80, phase:1,attackDmg:8, attackDelay:7000},
-    {id:'virus', name:'VIRUS.EXE',    avatar:'🦠',maxHp:120,phase:1,attackDmg:12,attackDelay:6000},
-    {id:'boss',  name:'SYSTEM BOSS',  avatar:'💀',maxHp:300,phase:1,attackDmg:18,attackDelay:5000,isBoss:true},
-    {id:'glitch',name:'GLITCH_GHOST', avatar:'👾',maxHp:100,phase:1,attackDmg:10,attackDelay:6500},
-    {id:'phantom',name:'PHANTOM.SYS', avatar:'🕷️',maxHp:200,phase:1,attackDmg:15,attackDelay:5500}
+    {id:'bot',   name:'ROGUE BOT',    avatar:'🤖',maxHp:60, phase:1,attackDmg:5, attackDelay:9000},
+    {id:'virus', name:'VIRUS.EXE',    avatar:'🦠',maxHp:80, phase:1,attackDmg:7, attackDelay:8000},
+    {id:'boss',  name:'SYSTEM BOSS',  avatar:'💀',maxHp:150,phase:1,attackDmg:10,attackDelay:7000,isBoss:true},
+    {id:'glitch',name:'GLITCH_GHOST', avatar:'👾',maxHp:70, phase:1,attackDmg:6, attackDelay:8500},
+    {id:'phantom',name:'PHANTOM.SYS', avatar:'🕷️',maxHp:100,phase:1,attackDmg:8, attackDelay:7500}
   ];
 
   function init(mode,skin,firstWord){
@@ -1325,10 +1325,11 @@ const Game = (() => {
     const zone=document.getElementById('enemyZone');
     if(zone)zone.innerHTML='';
     state.enemies=[];
-    const waveConfig={1:[ENEMIES[0]],2:[ENEMIES[0],ENEMIES[3]],3:[ENEMIES[1],ENEMIES[3]],4:[ENEMIES[1],ENEMIES[0],ENEMIES[3]],5:[ENEMIES[4]],6:[ENEMIES[2]]};
-    const config=waveConfig[Math.min(state.wave,6)]||[ENEMIES[1],ENEMIES[3]];
+    const waveConfig={1:[ENEMIES[0]],2:[ENEMIES[0]],3:[ENEMIES[1]],4:[ENEMIES[3]],5:[ENEMIES[4]],6:[ENEMIES[2]]};
+    const config=waveConfig[Math.min(state.wave,6)]||[ENEMIES[1]];
     config.forEach(template=>{
-      const enemy={...template,hp:Math.floor(template.maxHp*(1+(state.wave-1)*.2)),maxHp:Math.floor(template.maxHp*(1+(state.wave-1)*.2)),phase:1,frozen:false,burning:false,burnTick:null,attackTimer:null};
+      const hpScale=1+(state.wave-1)*0.08;
+      const enemy={...template,hp:Math.floor(template.maxHp*hpScale),maxHp:Math.floor(template.maxHp*hpScale),phase:1,frozen:false,burning:false,burnTick:null,attackTimer:null};
       state.enemies.push(enemy);
       renderEnemy(enemy);
       scheduleEnemyAttack(enemy);
