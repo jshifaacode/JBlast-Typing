@@ -1286,11 +1286,22 @@ const Game = (() => {
     {id:'phantom',name:'PHANTOM.SYS', avatar:'🕷️',maxHp:100,phase:1,attackDmg:8, attackDelay:7500}
   ];
 
+  const WAVE_BOTS = [
+    {id:'bot',   name:'ROGUE BOT',    avatar:'🤖', wpm:22},
+    {id:'virus', name:'VIRUS.EXE',    avatar:'🦠', wpm:28},
+    {id:'glitch',name:'GLITCH_GHOST', avatar:'👾', wpm:33},
+    {id:'phantom',name:'PHANTOM.SYS', avatar:'🕷️', wpm:38},
+    {id:'boss',  name:'SYSTEM BOSS',  avatar:'💀', wpm:44, isBoss:true}
+  ];
+
   function init(mode,skin,firstWord){
     state.mode=mode;state.skin=skin||'default';state.wave=1;state.score=0;
-    state.playerHp=150;state.maxPlayerHp=150;state.combo=0;state.maxCombo=0;
+    state.playerHp=150;state.maxPlayerHp=150;
+    state.botHp=150;state.botMaxHp=150;
+    state.combo=0;state.maxCombo=0;
     state.totalChars=0;state.correctChars=0;state.wrongChars=0;
     state.startTime=Date.now();state.running=false;state.gameTimer=0;state.enemies=[];
+    state.botTimer=null;state.currentBot=null;
     state._firstWord=firstWord||null;
     Object.keys(state.skills).forEach(k=>{state.skills[k].active=false;state.skills[k].cooldown=0;});
     ['Overdrive','Freeze','Burn'].forEach(sk=>{
@@ -1325,18 +1336,84 @@ const Game = (() => {
     const zone=document.getElementById('enemyZone');
     if(zone)zone.innerHTML='';
     state.enemies=[];
-    const waveConfig={1:[ENEMIES[0]],2:[ENEMIES[0]],3:[ENEMIES[1]],4:[ENEMIES[3]],5:[ENEMIES[4]],6:[ENEMIES[2]]};
-    const config=waveConfig[Math.min(state.wave,6)]||[ENEMIES[1]];
-    config.forEach(template=>{
-      const hpScale=1+(state.wave-1)*0.08;
-      const enemy={...template,hp:Math.floor(template.maxHp*hpScale),maxHp:Math.floor(template.maxHp*hpScale),phase:1,frozen:false,burning:false,burnTick:null,attackTimer:null};
-      state.enemies.push(enemy);
-      renderEnemy(enemy);
-      scheduleEnemyAttack(enemy);
-    });
+    if(state.botTimer){clearTimeout(state.botTimer);state.botTimer=null;}
+
+    if(state.mode==='solo'){
+      const botTemplate=WAVE_BOTS[Math.min(state.wave-1,WAVE_BOTS.length-1)];
+      state.currentBot={...botTemplate};
+      renderDuelBot(state.currentBot);
+    }else{
+      const waveConfig={1:[ENEMIES[0]],2:[ENEMIES[0]],3:[ENEMIES[1]],4:[ENEMIES[3]],5:[ENEMIES[4]],6:[ENEMIES[2]]};
+      const config=waveConfig[Math.min(state.wave,6)]||[ENEMIES[1]];
+      config.forEach(template=>{
+        const hpScale=1+(state.wave-1)*0.08;
+        const enemy={...template,hp:Math.floor(template.maxHp*hpScale),maxHp:Math.floor(template.maxHp*hpScale),phase:1,frozen:false,burning:false,burnTick:null,attackTimer:null};
+        state.enemies.push(enemy);
+        renderEnemy(enemy);
+        scheduleEnemyAttack(enemy);
+      });
+    }
+
     const wdEl=document.getElementById('waveDisplay');
     if(wdEl)wdEl.textContent='W'+state.wave;
     nextWord();
+  }
+
+  function renderDuelBot(bot){
+    const zone=document.getElementById('enemyZone');if(!zone)return;
+    zone.innerHTML=`
+      <div class="duel-bot-card" id="duel-bot">
+        <div class="duel-bot-avatar">${bot.avatar}</div>
+        <div class="duel-bot-name">${bot.name}</div>
+        <div class="duel-bot-wpm" id="duel-bot-wpm">${bot.wpm} WPM</div>
+        <div class="duel-bot-word" id="duel-bot-word"></div>
+        <div class="duel-bot-bar-wrap">
+          <div class="duel-bot-bar-fill" id="duel-bot-progress" style="width:0%"></div>
+        </div>
+      </div>`;
+  }
+
+  function startBotTyping(word){
+    if(state.mode!=='solo'||!state.currentBot||!state.running)return;
+    if(state.botTimer){clearTimeout(state.botTimer);state.botTimer=null;}
+    const bot=state.currentBot;
+    const msPerChar=60000/(bot.wpm*5);
+    const totalChars=word.length;
+    let charIdx=0;
+    const progressEl=document.getElementById('duel-bot-progress');
+    const wordEl=document.getElementById('duel-bot-word');
+    if(wordEl)wordEl.innerHTML=word.split('').map(c=>`<span style="color:rgba(255,255,255,0.3)">${c}</span>`).join('');
+
+    function typeNext(){
+      if(!state.running||charIdx>=totalChars)return;
+      charIdx++;
+      const pct=(charIdx/totalChars)*100;
+      if(progressEl)progressEl.style.width=pct+'%';
+      if(wordEl){
+        wordEl.innerHTML=word.split('').map((c,i)=>`<span style="color:${i<charIdx?'var(--red)':'rgba(255,255,255,0.3)'}">${c}</span>`).join('');
+      }
+      if(charIdx>=totalChars){
+        onBotWordComplete();
+        return;
+      }
+      const jitter=0.7+Math.random()*0.6;
+      state.botTimer=setTimeout(typeNext,Math.floor(msPerChar*jitter));
+    }
+    state.botTimer=setTimeout(typeNext,400+Math.random()*300);
+  }
+
+  function onBotWordComplete(){
+    if(!state.running)return;
+    if(state.botTimer){clearTimeout(state.botTimer);state.botTimer=null;}
+    const dmg=18+Math.floor(Math.random()*8);
+    const heal=Math.min(10,Math.floor(dmg*0.2));
+    state.playerHp=Math.max(0,state.playerHp-dmg);
+    state.botHp=Math.min(state.botMaxHp,state.botHp+heal);
+    Effects.damageFlash();Audio.playerHit();
+    Effects.showToast(`💥 ${state.currentBot.name} selesai duluan! -${dmg} HP kamu`,'warning',1800);
+    renderHpBars();
+    if(state.playerHp<=0){endGame(false);return;}
+    setTimeout(nextWord,600);
   }
 
   function renderEnemy(enemy){
