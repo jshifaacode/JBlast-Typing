@@ -141,7 +141,7 @@ body{
   transition:letter-spacing .2s,background .2s,box-shadow .2s;
   text-align:center;width:100%;display:block;
   text-shadow:0 0 8px var(--cyan);
-  -webkit-appearance:none;
+  appearance:none;-webkit-appearance:none;
 }
 .btn::before{
   content:'';position:absolute;top:50%;left:50%;
@@ -162,7 +162,7 @@ body{
   background:transparent;border:1px solid var(--border2);
   color:var(--text-mid);padding:10px 14px;cursor:pointer;
   letter-spacing:1px;transition:all .2s;display:inline-block;
-  margin-bottom:14px;-webkit-appearance:none;
+  margin-bottom:14px;appearance:none;-webkit-appearance:none;
 }
 .btn-back:hover{border-color:var(--cyan);color:var(--cyan);}
 
@@ -236,7 +236,7 @@ body{
   background:rgba(0,0,0,.65);border:1px solid var(--border2);
   color:var(--cyan);font-family:'Press Start 2P',monospace;font-size:10px;
   letter-spacing:2px;outline:none;transition:border-color .2s,box-shadow .2s;
-  caret-color:var(--cyan);-webkit-appearance:none;
+  caret-color:var(--cyan);appearance:none;-webkit-appearance:none;
 }
 .form-group input[type=text]:focus{border-color:var(--cyan);box-shadow:0 0 16px var(--glow-c),inset 0 0 12px rgba(0,245,255,.04);}
 .form-group input[type=text]::placeholder{color:rgba(0,245,255,.2);}
@@ -330,7 +330,7 @@ body{
   background:rgba(0,0,0,.65);border:1px solid var(--border2);
   color:var(--cyan);font-family:'Press Start 2P',monospace;
   font-size:12px;letter-spacing:4px;text-align:center;
-  outline:none;margin-bottom:10px;text-transform:uppercase;-webkit-appearance:none;
+  outline:none;margin-bottom:10px;text-transform:uppercase;appearance:none;-webkit-appearance:none;
 }
 .mp-card input:focus{border-color:var(--cyan);box-shadow:0 0 12px var(--glow-c);}
 .mp-divider{font-family:'Press Start 2P',monospace;font-size:8px;color:var(--text-dim);letter-spacing:2px;writing-mode:vertical-rl;text-align:center;}
@@ -435,7 +435,7 @@ body{
   background:rgba(0,0,0,.6);border:1px solid var(--border2);
   padding:9px 4px;cursor:pointer;transition:all .15s;text-align:center;
   position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;
-  -webkit-appearance:none;
+  appearance:none;-webkit-appearance:none;
 }
 .skill-btn:disabled{opacity:.35;cursor:not-allowed;}
 .skill-btn:not(:disabled):hover,.skill-btn:not(:disabled):active{border-color:var(--cyan);background:rgba(0,245,255,.06);}
@@ -461,7 +461,7 @@ body{
   flex:1;background:transparent;border:none;outline:none;
   font-family:'Press Start 2P',monospace;font-size:clamp(10px,2.5vw,13px);
   color:var(--cyan);letter-spacing:2px;caret-color:var(--cyan);
-  width:100%;min-width:0;-webkit-appearance:none;
+  width:100%;min-width:0;appearance:none;-webkit-appearance:none;
 }
 #gameInput::placeholder{color:rgba(0,245,255,.2);font-size:9px;}
 #gameInput.wrong-char{animation:inputWrong .2s ease-out;}
@@ -483,7 +483,7 @@ body{
   color:var(--text);font-family:'Press Start 2P',monospace;font-size:9px;
   min-width:32px;height:40px;padding:0 6px;cursor:pointer;
   transition:all .1s;flex:1;max-width:42px;text-align:center;
-  -webkit-tap-highlight-color:transparent;-webkit-appearance:none;
+  -webkit-tap-highlight-color:transparent;appearance:none;-webkit-appearance:none;
   display:flex;align-items:center;justify-content:center;
 }
 .key-btn:active,.key-btn.pressed{background:rgba(0,245,255,.15);border-color:var(--cyan);color:var(--cyan);transform:scale(.93);}
@@ -987,58 +987,285 @@ const Effects = (() => {
 })();
 
 /* ==============================================
-   MULTIPLAYER (original multiplayer.js)
+   MULTIPLAYER — Firebase Realtime Database
+   ============================================
+   SETUP (GRATIS, 5 MENIT):
+   1. Buka https://console.firebase.google.com
+   2. Buat project → Realtime Database → Create Database
+      → pilih region → "Start in test mode"
+   3. Salin URL database (https://xxx-default-rtdb.firebaseio.com)
+   4. Ganti FIREBASE_URL di bawah dengan URL kamu
+   5. Di Firebase Console → Realtime Database → Rules → Publish:
+      { "rules": { "rooms": { "$r": { ".read":true, ".write":true } } } }
 =============================================== */
+const FIREBASE_URL = 'https://YOUR-PROJECT-default-rtdb.firebaseio.com';
+// ↑↑↑ WAJIB DIGANTI DENGAN URL FIREBASE KAMU ↑↑↑
+
 const Multiplayer = (() => {
   let currentRoom=null,playerId=null,isHost=false,players={},callbacks={};
+  let _listeners=[],_botIntervals=[];
+  let _pollInterval=null; // polling fallback
+
   function generateRoomCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let r='';for(let i=0;i<5;i++)r+=c[Math.floor(Math.random()*c.length)];return r;}
   function generatePlayerId(){return Math.random().toString(36).substr(2,9);}
   function on(ev,cb){callbacks[ev]=cb;}
   function emit(ev,data){if(callbacks[ev])callbacks[ev](data);}
-  function simulateMultiplayer(roomCode,playerData,hosted){
-    currentRoom=roomCode;playerId=playerData.id;isHost=hosted;players={};
-    players[playerId]={...playerData,hp:100,wpm:0,progress:0};
-    const botNames=['CYPHER_X','VOID_RUNNER','GHOST_42','NEON_STRIKE'];
-    const botAvatars=['🤖','👾','💀','🦾'];
-    const botCount=Math.floor(Math.random()*3)+1;
-    for(let i=0;i<botCount;i++){
-      const bid='bot_'+i;
-      players[bid]={id:bid,name:botNames[i],avatar:botAvatars[i],hp:100,wpm:0,progress:0,isBot:true,speed:.5+Math.random()*1.5};
-    }
-    emit('room_joined',{roomCode,players:Object.values(players),isHost});
-    setTimeout(()=>emit('player_joined',players[playerId]),200);
-    return{roomCode,players:Object.values(players)};
+
+  // ── Firebase REST ──────────────────────────────────────────
+  const FB = FIREBASE_URL.replace(/\/+$/,'');
+  async function fbGet(path){
+    try{const r=await fetch(`${FB}/${path}.json`,{cache:'no-store'});const d=await r.json();return d;}catch(e){return null;}
   }
-  function createRoom(pd){const c=generateRoomCode();pd.id=pd.id||generatePlayerId();return simulateMultiplayer(c,pd,true);}
-  function joinRoom(code,pd){pd.id=pd.id||generatePlayerId();return simulateMultiplayer(code.toUpperCase(),pd,false);}
-  function startGame(){if(!isHost)return;emit('game_start',{word:Words.getByWave(1),players:Object.values(players)});}
-  let botIntervals=[];
-  function startBotSimulation(word){
-    botIntervals.forEach(clearInterval);botIntervals=[];
-    Object.values(players).forEach(p=>{
-      if(!p.isBot)return;
-      let charIdx=0;const total=word.replace(/ /g,'').length;
-      const baseDelay=Math.floor(1000/(p.speed*4));
-      const iv=setInterval(()=>{
-        if(charIdx>=total){clearInterval(iv);emit('player_word_complete',{playerId:p.id,wpm:Math.floor(p.speed*60)});return;}
-        charIdx++;p.progress=charIdx/total;p.wpm=Math.floor(p.speed*50+Math.random()*20);
-        emit('player_progress',{playerId:p.id,progress:p.progress,wpm:p.wpm});
-      },baseDelay+Math.random()*200);
-      botIntervals.push(iv);
+  async function fbSet(path,data){
+    try{await fetch(`${FB}/${path}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});}catch(e){}
+  }
+  async function fbUpdate(path,data){
+    try{await fetch(`${FB}/${path}.json`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});}catch(e){}
+  }
+  async function fbDelete(path){
+    try{await fetch(`${FB}/${path}.json`,{method:'DELETE'});}catch(e){}
+  }
+  async function fbPush(path,data){
+    try{
+      const r=await fetch(`${FB}/${path}.json`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      const d=await r.json();return d.name;
+    }catch(e){return null;}
+  }
+
+  // ── SSE Real-time Listener ─────────────────────────────────
+  function fbListen(path,cb){
+    if(typeof EventSource==='undefined')return null;
+    try{
+      const es=new EventSource(`${FB}/${path}.json`);
+      es.addEventListener('put',e=>{try{const d=JSON.parse(e.data);cb(d.data,d.path||'/');}catch(_){}});
+      es.addEventListener('patch',e=>{try{const d=JSON.parse(e.data);cb(d.data,d.path||'/');}catch(_){}});
+      es.onerror=()=>{};
+      _listeners.push(es);
+      return es;
+    }catch(e){return null;}
+  }
+
+  function _closeListeners(){
+    _listeners.forEach(es=>{try{es.close();}catch(_){}});
+    _listeners=[];
+    if(_pollInterval){clearInterval(_pollInterval);_pollInterval=null;}
+  }
+
+  // ── Polling fallback (backup jika SSE fail) ────────────────
+  let _lastPlayersSnapshot='';
+  let _lastStatus='';
+  function _startPolling(code){
+    _pollInterval=setInterval(async()=>{
+      const room=await fbGet(`rooms/${code}`);
+      if(!room)return;
+      // Detect player changes
+      const snap=JSON.stringify(room.players||{});
+      if(snap!==_lastPlayersSnapshot){
+        _lastPlayersSnapshot=snap;
+        players=room.players||{};
+        emit('players_update',{players:Object.values(players)});
+        _updateLobbyUI();
+      }
+      // Detect game start (for non-host)
+      if(!isHost && room.status==='playing' && _lastStatus!=='playing'){
+        _lastStatus='playing';
+        if(room.currentWord) emit('game_start',{word:room.currentWord,players:Object.values(players)});
+      }
+      if(room.status) _lastStatus=room.status;
+    },1500);
+  }
+
+  // ── Room setup ─────────────────────────────────────────────
+  function _makePlayerEntry(pd){
+    return{id:pd.id,name:pd.name,avatar:pd.avatar,hp:100,wpm:0,progress:0,ready:true,isBot:false,online:true};
+  }
+
+  async function createRoom(pd){
+    if(FIREBASE_URL.includes('YOUR-PROJECT')){
+      Effects.showToast('⚠️ Set FIREBASE_URL dulu di kode!','error');
+      return _fallbackCreate(pd);
+    }
+    pd.id=pd.id||generatePlayerId();
+    playerId=pd.id; isHost=true;
+    const code=generateRoomCode();
+    currentRoom=code;
+    const roomData={
+      code,host:playerId,status:'lobby',createdAt:Date.now(),
+      players:{[playerId]:_makePlayerEntry(pd)},
+      currentWord:'',events:{}
+    };
+    await fbSet(`rooms/${code}`,roomData);
+    players={[playerId]:_makePlayerEntry(pd)};
+    _setupListeners(code);
+    _startPolling(code);
+    window.addEventListener('beforeunload',()=>navigator.sendBeacon(`${FB}/rooms/${code}/players/${playerId}/online.json`,'false'));
+    return{roomCode:code,players:Object.values(players)};
+  }
+
+  async function joinRoom(code,pd){
+    if(FIREBASE_URL.includes('YOUR-PROJECT')){
+      Effects.showToast('⚠️ Set FIREBASE_URL dulu di kode!','error');
+      return _fallbackJoin(code,pd);
+    }
+    code=code.toUpperCase();
+    const roomData=await fbGet(`rooms/${code}`);
+    if(!roomData){Effects.showToast('ROOM TIDAK DITEMUKAN!','error');return null;}
+    if(roomData.status==='playing'){Effects.showToast('GAME SUDAH BERJALAN!','error');return null;}
+    pd.id=pd.id||generatePlayerId();
+    playerId=pd.id; isHost=false; currentRoom=code;
+    await fbSet(`rooms/${code}/players/${playerId}`,_makePlayerEntry(pd));
+    const allPlayers=await fbGet(`rooms/${code}/players`);
+    players=allPlayers||{};
+    _setupListeners(code);
+    _startPolling(code);
+    window.addEventListener('beforeunload',()=>navigator.sendBeacon(`${FB}/rooms/${code}/players/${playerId}/online.json`,'false'));
+    return{roomCode:code,players:Object.values(players)};
+  }
+
+  function _setupListeners(code){
+    // Listen players
+    fbListen(`rooms/${code}/players`,(data,path)=>{
+      if(!data&&path==='/')return;
+      if(path==='/'||path===''){
+        if(typeof data==='object'&&data!==null){players=data;emit('players_update',{players:Object.values(players)});_updateLobbyUI();}
+      }else{
+        const parts=path.replace(/^\//,'').split('/');
+        const pid2=parts[0];
+        if(!pid2)return;
+        if(data===null){delete players[pid2];}
+        else if(typeof data==='object'){players[pid2]={...(players[pid2]||{}),...data};}
+        else if(parts.length>1){if(!players[pid2])players[pid2]={};players[pid2][parts[1]]=data;}
+        emit('players_update',{players:Object.values(players)});
+        emit('player_progress',{playerId:pid2,progress:players[pid2]?.progress||0,wpm:players[pid2]?.wpm||0});
+        emit('hp_update',{playerId:pid2,hp:players[pid2]?.hp??100});
+        _updateLobbyUI();
+      }
+    });
+    // Listen game status (for non-host)
+    fbListen(`rooms/${code}/status`,(data)=>{
+      if(data==='playing'&&!isHost){
+        fbGet(`rooms/${code}/currentWord`).then(w=>{
+          if(w)emit('game_start',{word:w,players:Object.values(players)});
+        });
+      }
+    });
+    // Listen events (typing etc)
+    fbListen(`rooms/${code}/events`,(data,path)=>{
+      if(!data||path==='/'||path==='')return;
+      if(typeof data==='object'&&data.type&&data.from!==playerId)_handleEvent(data);
     });
   }
-  function stopBots(){botIntervals.forEach(clearInterval);botIntervals=[];}
-  function sendProgress(progress,wpm){if(!currentRoom)return;if(players[playerId]){players[playerId].progress=progress;players[playerId].wpm=wpm;}emit('player_progress',{playerId,progress,wpm});}
-  function sendTyping(){emit('player_typing',{playerId,name:players[playerId]?.name});}
-  function sendDamage(targetId,amount){emit('damage_dealt',{from:playerId,to:targetId,amount});}
-  function updatePlayerHp(pid,hp){if(players[pid])players[pid].hp=hp;emit('hp_update',{playerId:pid,hp});}
-  function leaveRoom(){stopBots();currentRoom=null;players={};emit('left_room',{});}
+
+  function _handleEvent(ev){
+    if(ev.type==='typing')emit('player_typing',{playerId:ev.from,name:ev.name});
+    if(ev.type==='word_complete')emit('player_word_complete',{playerId:ev.from,wpm:ev.wpm});
+    if(ev.type==='damage')emit('damage_dealt',{from:ev.from,to:ev.to,amount:ev.amount});
+  }
+
+  function _updateLobbyUI(){
+    const grid=document.getElementById('lobbyPlayers');
+    if(!grid)return;
+    const myId=playerId;
+    grid.innerHTML=Object.values(players).map(p=>
+      `<div class="lpc ready">
+        <div class="lpc-avatar">${p.avatar||'⚡'}</div>
+        <div class="lpc-name">${p.name}${p.id===myId?' (YOU)':''}</div>
+        <div class="lpc-status" style="color:var(--green)">READY ✓</div>
+      </div>`
+    ).join('');
+    const st=document.getElementById('lobbyStatus');
+    if(st)st.textContent=Object.keys(players).length+' PILOT(S) IN LOBBY';
+  }
+
+  // ── Game actions ───────────────────────────────────────────
+  async function startGame(){
+    if(!isHost||!currentRoom)return;
+    const word=Words.getByWave(1);
+    await fbUpdate(`rooms/${currentRoom}`,{status:'playing',currentWord:word,startedAt:Date.now()});
+    emit('game_start',{word,players:Object.values(players)});
+  }
+
+  async function sendProgress(progress,wpm){
+    if(!currentRoom||!playerId)return;
+    if(players[playerId]){players[playerId].progress=progress;players[playerId].wpm=wpm;}
+    emit('player_progress',{playerId,progress,wpm});
+    await fbUpdate(`rooms/${currentRoom}/players/${playerId}`,{progress,wpm});
+  }
+
+  async function sendTyping(){
+    if(!currentRoom||!playerId)return;
+    emit('player_typing',{playerId,name:players[playerId]?.name});
+    const id=Date.now().toString(36);
+    await fbSet(`rooms/${currentRoom}/events/${id}`,{type:'typing',from:playerId,name:players[playerId]?.name||'?',ts:Date.now()});
+  }
+
+  async function sendDamage(targetId,amount){
+    if(!currentRoom||!playerId)return;
+    const id=Date.now().toString(36)+'_d';
+    await fbSet(`rooms/${currentRoom}/events/${id}`,{type:'damage',from:playerId,to:targetId,amount,ts:Date.now()});
+  }
+
+  async function updatePlayerHp(pid,hp){
+    if(!currentRoom)return;
+    if(players[pid])players[pid].hp=hp;
+    emit('hp_update',{playerId:pid,hp});
+    await fbUpdate(`rooms/${currentRoom}/players/${pid}`,{hp});
+  }
+
+  async function leaveRoom(){
+    stopBots();_closeListeners();
+    if(currentRoom&&playerId){
+      await fbDelete(`rooms/${currentRoom}/players/${playerId}`);
+      if(isHost)await fbDelete(`rooms/${currentRoom}`);
+    }
+    currentRoom=null;players={};isHost=false;
+    emit('left_room',{});
+  }
+
+  // ── Bot sim ────────────────────────────────────────────────
+  function startBotSimulation(word){
+    _botIntervals.forEach(clearInterval);_botIntervals=[];
+    Object.values(players).forEach(p=>{
+      if(!p.isBot)return;
+      let idx=0;const total=word.replace(/ /g,'').length;
+      const delay=Math.floor(1000/(p.speed*4));
+      const iv=setInterval(()=>{
+        if(idx>=total){clearInterval(iv);emit('player_word_complete',{playerId:p.id,wpm:Math.floor(p.speed*60)});return;}
+        idx++;p.progress=idx/total;p.wpm=Math.floor(p.speed*50+Math.random()*20);
+        emit('player_progress',{playerId:p.id,progress:p.progress,wpm:p.wpm});
+      },delay+Math.random()*200);
+      _botIntervals.push(iv);
+    });
+  }
+  function stopBots(){_botIntervals.forEach(clearInterval);_botIntervals=[];}
+
+  // ── Fallback (lokal, jika Firebase belum dikonfigurasi) ────
+  function _fallbackCreate(pd){
+    pd.id=pd.id||generatePlayerId();playerId=pd.id;isHost=true;
+    const code=generateRoomCode();currentRoom=code;players={};
+    players[playerId]={...pd,hp:100,wpm:0,progress:0,isBot:false};
+    const bots=[{n:'CYPHER_X',a:'🤖'},{n:'VOID_RUNNER',a:'👾'},{n:'GHOST_42',a:'💀'}];
+    for(let i=0;i<2;i++){const b='bot_'+i;players[b]={id:b,name:bots[i].n,avatar:bots[i].a,hp:100,wpm:0,progress:0,isBot:true,speed:.5+Math.random()*1.5};}
+    return{roomCode:code,players:Object.values(players)};
+  }
+  function _fallbackJoin(code,pd){
+    pd.id=pd.id||generatePlayerId();playerId=pd.id;isHost=false;currentRoom=code.toUpperCase();players={};
+    players[playerId]={...pd,hp:100,wpm:0,progress:0,isBot:false};
+    const bots=[{n:'CYBER_GHOST',a:'👾'}];
+    players['bot_0']={id:'bot_0',name:bots[0].n,avatar:bots[0].a,hp:100,wpm:0,progress:0,isBot:true,speed:.8+Math.random()};
+    Effects.showToast('MODE LOKAL (set Firebase untuk multiplayer nyata)','warning');
+    return{roomCode:currentRoom,players:Object.values(players)};
+  }
+
   function getPlayers(){return Object.values(players);}
   function getPlayer(){return players[playerId];}
   function getCurrentRoom(){return currentRoom;}
   function getIsHost(){return isHost;}
   function getPlayerId(){return playerId;}
-  return{on,createRoom,joinRoom,startGame,startBotSimulation,stopBots,sendProgress,sendTyping,sendDamage,updatePlayerHp,leaveRoom,getPlayers,getPlayer,getCurrentRoom,getIsHost,getPlayerId,generatePlayerId};
+
+  return{on,generatePlayerId,createRoom,joinRoom,startGame,startBotSimulation,stopBots,
+    sendProgress,sendTyping,sendDamage,updatePlayerHp,leaveRoom,
+    getPlayers,getPlayer,getCurrentRoom,getIsHost,getPlayerId};
 })();
 
 /* ==============================================
@@ -1051,7 +1278,7 @@ const Game = (() => {
     currentWord:'',displayWord:'',typedIndex:0,enemies:[],running:false,paused:false,
     gameTimer:0,timerInterval:null,attackInterval:null,
     skills:{overdrive:{active:false,cooldown:0},freeze:{active:false,cooldown:0},burn:{active:false,cooldown:0}},
-    multiplayer:false,skin:'default'
+    multiplayer:false,skin:'default',_firstWord:null
   };
 
   const ENEMIES = [
@@ -1062,13 +1289,13 @@ const Game = (() => {
     {id:'phantom',name:'PHANTOM.SYS', avatar:'🕷️',maxHp:200,phase:1,attackDmg:20,attackDelay:3500}
   ];
 
-  function init(mode,skin){
+  function init(mode,skin,firstWord){
     state.mode=mode;state.skin=skin||'default';state.wave=1;state.score=0;
     state.playerHp=100;state.maxPlayerHp=100;state.combo=0;state.maxCombo=0;
     state.totalChars=0;state.correctChars=0;state.wrongChars=0;
     state.startTime=Date.now();state.running=true;state.gameTimer=0;state.enemies=[];
+    state._firstWord=firstWord||null; // kata pertama dari Firebase (agar semua player dapat kata sama)
     Object.keys(state.skills).forEach(k=>{state.skills[k].active=false;state.skills[k].cooldown=0;});
-    // reset skill UI
     ['Overdrive','Freeze','Burn'].forEach(sk=>{
       const btn=document.getElementById('skill'+sk);
       if(btn){btn.disabled=true;btn.classList.remove('ready-glow');}
@@ -1128,18 +1355,25 @@ const Game = (() => {
   }
 
   function nextWord(){
-    const isBoss=state.enemies.some(e=>e.isBoss);
-    if(isBoss){
-      const boss=state.enemies.find(e=>e.isBoss);
-      if(boss){
-        if(boss.phase===1){state.currentWord=Words.getBoss().toLowerCase().split(' ')[0];state.displayWord=state.currentWord;}
-        else if(boss.phase===2){state.currentWord=Words.getHard();state.displayWord=Words.glitch(state.currentWord);}
-        else if(boss.phase===3){state.currentWord=Words.getHard();state.displayWord=Words.hideChars(state.currentWord);}
-        else{state.currentWord=Words.getHard();state.displayWord=state.currentWord;}
-      }
+    // Gunakan kata dari Firebase jika tersedia (kata pertama saat multiplayer)
+    if(state._firstWord){
+      state.currentWord=state._firstWord;
+      state.displayWord=state._firstWord;
+      state._firstWord=null; // hanya dipakai sekali
     }else{
-      state.currentWord=Words.getByWave(state.wave);
-      state.displayWord=state.currentWord;
+      const isBoss=state.enemies.some(e=>e.isBoss);
+      if(isBoss){
+        const boss=state.enemies.find(e=>e.isBoss);
+        if(boss){
+          if(boss.phase===1){state.currentWord=Words.getBoss().toLowerCase().split(' ')[0];state.displayWord=state.currentWord;}
+          else if(boss.phase===2){state.currentWord=Words.getHard();state.displayWord=Words.glitch(state.currentWord);}
+          else if(boss.phase===3){state.currentWord=Words.getHard();state.displayWord=Words.hideChars(state.currentWord);}
+          else{state.currentWord=Words.getHard();state.displayWord=state.currentWord;}
+        }
+      }else{
+        state.currentWord=Words.getByWave(state.wave);
+        state.displayWord=state.currentWord;
+      }
     }
     state.typedIndex=0;state.wordStartTime=Date.now();
     renderWord();
@@ -1626,7 +1860,9 @@ const App = (() => {
     Game.init('solo',p.skin);
   }
 
-  function startMultiplayerGame(){
+  function startMultiplayerGame(firstWord){
+    // Jangan start ulang kalau game sudah berjalan
+    if(document.getElementById('screen-game')?.classList.contains('active')&&Game.getState().running)return;
     const p=getProfile();
     UI.showScreen('screen-game');
     const kb=document.getElementById('mobileKeyboard');
@@ -1639,7 +1875,7 @@ const App = (() => {
       if(inp){inp.style.opacity='';inp.style.position='';inp.style.pointerEvents='';}
       setTimeout(()=>inp&&inp.focus(),120);
     }
-    Game.init('multiplayer',p.skin);
+    Game.init('multiplayer',p.skin,firstWord);
     Game.setupMultiplayer();
   }
 
@@ -1674,29 +1910,43 @@ const App = (() => {
     $('btnBackFromMP').addEventListener('click',()=>UI.showScreen('screen-menu'));
     $('btnBackFromStats').addEventListener('click',()=>UI.showScreen('screen-menu'));
 
-    // Multiplayer
-    $('btnCreateRoom').addEventListener('click',()=>{
+    // Multiplayer — async karena Firebase
+    $('btnCreateRoom').addEventListener('click',async()=>{
       const p=getProfile();p.id=p.id||Multiplayer.generatePlayerId();saveProfile(p);
-      const r=Multiplayer.createRoom({id:p.id,name:p.name,avatar:p.avatar,hp:100,wpm:0,progress:0});
-      buildLobby(r.players,true,r.roomCode);UI.showScreen('screen-lobby');
-      Effects.showToast('ROOM CREATED!','success');
+      $('btnCreateRoom').disabled=true;$('btnCreateRoom').textContent='CREATING...';
+      const r=await Multiplayer.createRoom({id:p.id,name:p.name,avatar:p.avatar,hp:100,wpm:0,progress:0});
+      $('btnCreateRoom').disabled=false;$('btnCreateRoom').textContent='CREATE';
+      if(!r){Effects.showToast('GAGAL BUAT ROOM!','error');return;}
+      buildLobby(r.players,true,r.roomCode);
+      UI.showScreen('screen-lobby');
+      Effects.showToast('ROOM DIBUAT! Share kode ke teman.','success');
+      Multiplayer.on('game_start',({word})=>startMultiplayerGame(word));
     });
-    $('btnJoinRoom').addEventListener('click',()=>{
+    $('btnJoinRoom').addEventListener('click',async()=>{
       const code=($('inputRoomCode').value||'').trim().toUpperCase();
-      if(code.length<4){Effects.showToast('ENTER A VALID CODE!','error');return;}
+      if(code.length<4){Effects.showToast('KODE MIN. 4 KARAKTER!','error');return;}
       const p=getProfile();p.id=p.id||Multiplayer.generatePlayerId();saveProfile(p);
-      const r=Multiplayer.joinRoom(code,{id:p.id,name:p.name,avatar:p.avatar,hp:100,wpm:0,progress:0});
-      buildLobby(r.players,false,r.roomCode);UI.showScreen('screen-lobby');
-      Effects.showToast('JOINED ROOM '+r.roomCode+'!','success');
+      $('btnJoinRoom').disabled=true;$('btnJoinRoom').textContent='JOINING...';
+      const r=await Multiplayer.joinRoom(code,{id:p.id,name:p.name,avatar:p.avatar,hp:100,wpm:0,progress:0});
+      $('btnJoinRoom').disabled=false;$('btnJoinRoom').textContent='JOIN';
+      if(!r)return;
+      buildLobby(r.players,false,r.roomCode);
+      UI.showScreen('screen-lobby');
+      Effects.showToast('JOINED '+r.roomCode+'! Tunggu host start.','success');
+      Multiplayer.on('game_start',({word})=>startMultiplayerGame(word));
     });
     $('inputRoomCode').addEventListener('input',function(){this.value=this.value.toUpperCase();});
     $('btnCopyCode').addEventListener('click',()=>{
       const code=$('lobbyCode').textContent;
       if(navigator.clipboard){navigator.clipboard.writeText(code).catch(()=>{});}
-      Effects.showToast('CODE COPIED: '+code,'success');
+      else{const ta=document.createElement('textarea');ta.value=code;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
+      Effects.showToast('KODE DISALIN: '+code,'success');
     });
-    $('btnStartMatch').addEventListener('click',()=>startMultiplayerGame());
-    $('btnLeaveLobby').addEventListener('click',()=>{Multiplayer.leaveRoom();UI.showScreen('screen-menu');});
+    $('btnStartMatch').addEventListener('click',async()=>{
+      await Multiplayer.startGame();
+      startMultiplayerGame();
+    });
+    $('btnLeaveLobby').addEventListener('click',async()=>{await Multiplayer.leaveRoom();UI.showScreen('screen-menu');});
 
     // Game input (desktop)
     $('gameInput').addEventListener('input',e=>{Game.handleInput(e);});
