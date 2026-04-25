@@ -1,39 +1,36 @@
 const Words = (() => {
   const easy = [
-    'hack','code','fire','byte','kill','data','node','loop','wire','flux',
-    'core','dead','scan','grid','void','echo','trap','burn','dash','bolt',
-    'sync','push','pull','drop','type','rage','zero','neon','glitch','wave',
-    'hit','run','cmd','sys','exe','bat','ram','cpu','gpu','ssh'
+     'sus','cegil','fomo','gokil','gas','mbg','izin','hts','relate',
+      'cringe','sus','mabar','clingy','baper','mager','bucin','gabut',
+      'dawg','spill','slay','vibe','plenger','kocak', 'bro',
+      'galau','kepo','alay','asik','mantap','crush','kicau','gamon'
   ];
 
   const medium = [
-    'attack','delete','buffer','system','player','damage','weapon','shield',
-    'server','bypass','inject','reboot','decode','cipher','matrix','vector',
-    'signal','syntax','runtime','upload','download','network','firewall','hacker',
-    'exploit','payload','command','execute','process','compile','pointer','socket',
-    'packet','token','access','denied','breach','target','hunter','shadow',
-    'phantom','vortex','blaster','striker','crawler','scanner','tracker','ghost'
-  ];
+    'prikitiw','fineshyt','kalcer','yapping','asyiap',
+    'validasi','ekspektasi','realita','kelas king','dejavu',
+    'bolang','friendlly','gimmick','furab','wibu',
+    'respect','santuy','excited','salting','recehan',
+    'miris','ghosting','bahlil','jokowi','esempe',
+    ];
 
-  const hard = [
-    'keystroke','algorithm','malware','ransomware','decryption','encryption',
-    'processor','keyboard','terminal','directory','extension','interface',
-    'catastrophe','deployment','parameter','bandwidth','hyperlink','mainframe',
-    'architecture','penetration','credentials','rootkit','backdoor','vulnerability',
-    'obfuscation','polymorphic','executable','initialize','compilation','recursion',
-    'hexadecimal','peripheral','configuration','optimization','authentication',
-    'distributed','subroutine','middleware','microservice','synchronization'
+  const hard = [  
+    'overthinking','mie ayam','spotify',
+    'waspada','understand','miscommunication',
+    'misinterpretasi','Sangat gokil','selfdiagnosis',
+    'quarterlifecrisis','overcomplicated','underestimated',
+    'hyperfixation','instantgratification','delusional',
   ];
 
   const boss = [
-    'INITIATE OVERRIDE SEQUENCE',
-    'EXECUTE SYSTEM CORRUPTION',
-    'BYPASS SECURITY PROTOCOL',
-    'ACTIVATE KILLSWITCH NOW',
-    'DEPLOY FINAL PAYLOAD',
-    'OVERRIDE ALL SYSTEMS',
-    'TERMINATE ALL PROCESSES',
-    'UNLEASH THE KEYSTORM'
+    'LAU SAPE MPRUY',
+    'KASIH PAHAM BOS',
+    'KATAKAN WHEN YAH',
+    'SAJA ADA ADA',
+    'DIT TOLONGIN DIT',
+    'KASIH PAHAM BRAY',
+    'HIDUP JOKOWI',
+    'HEY ANTEK ASING'
   ];
 
   const glitch = (word) => {
