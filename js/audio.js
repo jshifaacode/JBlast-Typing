@@ -1,90 +1,46 @@
 const Audio = (() => {
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  let _ctx = null;
   let muted = false;
-
-  function resume() {
-    if (ctx.state === 'suspended') ctx.resume();
+  function ctx() {
+    if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return _ctx;
   }
-
-  function playTone(freq, type, duration, gain = 0.3) {
-    resume();
-    if (muted) return;
+  function resume() { try { if(ctx().state==='suspended') ctx().resume(); } catch(e){} }
+  function tone(freq, type, dur, gain=.3) {
+    resume(); if(muted) return;
     try {
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gainNode.gain.setValueAtTime(gain, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + duration);
+      const o=ctx().createOscillator(), g=ctx().createGain();
+      o.connect(g); g.connect(ctx().destination);
+      o.type=type; o.frequency.setValueAtTime(freq,ctx().currentTime);
+      g.gain.setValueAtTime(gain,ctx().currentTime);
+      g.gain.exponentialRampToValueAtTime(.001,ctx().currentTime+dur);
+      o.start(); o.stop(ctx().currentTime+dur);
     } catch(e) {}
   }
-
-  function playNoise(duration, gain = 0.1) {
-    resume();
-    if (muted) return;
+  function noise(dur, gain=.1) {
+    resume(); if(muted) return;
     try {
-      const bufferSize = ctx.sampleRate * duration;
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(gain, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-      source.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      source.start();
+      const n=ctx().sampleRate*dur, buf=ctx().createBuffer(1,n,ctx().sampleRate), d=buf.getChannelData(0);
+      for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+      const s=ctx().createBufferSource(), g=ctx().createGain();
+      g.gain.setValueAtTime(gain,ctx().currentTime);
+      g.gain.exponentialRampToValueAtTime(.001,ctx().currentTime+dur);
+      s.buffer=buf; s.connect(g); g.connect(ctx().destination); s.start();
     } catch(e) {}
   }
-
   return {
-    keyPress() { playTone(800 + Math.random() * 200, 'square', 0.04, 0.08); },
-    keyCorrect() { playTone(1200, 'sine', 0.06, 0.12); },
-    keyError() {
-      playTone(200, 'sawtooth', 0.12, 0.15);
-      playNoise(0.08, 0.08);
-    },
-    wordComplete() {
-      playTone(800, 'sine', 0.05, 0.2);
-      setTimeout(() => playTone(1200, 'sine', 0.05, 0.15), 60);
-      setTimeout(() => playTone(1600, 'sine', 0.05, 0.1), 120);
-    },
-    hit() {
-      playTone(400, 'sawtooth', 0.08, 0.25);
-      playNoise(0.06, 0.06);
-    },
-    playerHit() {
-      playTone(150, 'sawtooth', 0.2, 0.3);
-      playNoise(0.15, 0.12);
-    },
-    comboUp() { playTone(600 + combo * 50, 'sine', 0.05, 0.2); },
-    overdrive() {
-      for (let i = 0; i < 5; i++) {
-        setTimeout(() => playTone(400 + i * 200, 'sawtooth', 0.1, 0.15), i * 40);
-      }
-    },
-    freeze() {
-      playTone(2000, 'sine', 0.3, 0.2);
-      playTone(1800, 'sine', 0.3, 0.2);
-    },
-    burn() {
-      playNoise(0.2, 0.15);
-      playTone(200, 'sawtooth', 0.2, 0.2);
-    },
-    victory() {
-      const notes = [523, 659, 784, 1047];
-      notes.forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.2, 0.25), i * 100));
-    },
-    defeat() {
-      const notes = [400, 300, 200, 150];
-      notes.forEach((f, i) => setTimeout(() => playTone(f, 'sawtooth', 0.25, 0.3), i * 150));
-    },
-    setMuted(v) { muted = v; },
-    isMuted() { return muted; }
+    keyPress(){ tone(800+Math.random()*200,'square',.04,.07); },
+    keyCorrect(){ tone(1200,'sine',.06,.1); },
+    keyError(){ tone(200,'sawtooth',.12,.14); noise(.08,.07); },
+    wordComplete(){ tone(800,'sine',.05,.18); setTimeout(()=>tone(1200,'sine',.05,.14),60); setTimeout(()=>tone(1600,'sine',.05,.1),120); },
+    hit(){ tone(400,'sawtooth',.08,.2); noise(.06,.05); },
+    playerHit(){ tone(150,'sawtooth',.2,.28); noise(.15,.1); },
+    comboUp(c){ tone(600+c*40,'sine',.05,.18); },
+    overdrive(){ for(let i=0;i<5;i++) setTimeout(()=>tone(400+i*200,'sawtooth',.1,.14),i*40); },
+    freeze(){ tone(2000,'sine',.3,.18); tone(1800,'sine',.3,.18); },
+    burn(){ noise(.2,.14); tone(200,'sawtooth',.2,.18); },
+    victory(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,'sine',.2,.22),i*100)); },
+    defeat(){ [400,300,200,150].forEach((f,i)=>setTimeout(()=>tone(f,'sawtooth',.25,.28),i*150)); },
+    setMuted(v){ muted=v; }, isMuted(){ return muted; }
   };
 })();
