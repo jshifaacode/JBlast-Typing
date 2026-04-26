@@ -113,7 +113,7 @@ const Game = (() => {
 
   function onBotWordComplete(bot) {
     if(!state.running) return;
-    // Bot selesai duluan: damage ke player, bot "heal" (efek visual saja, bot tidak punya HP bar)
+  
     const dmg = 18;
     state.playerHp = Math.max(0, state.playerHp - dmg);
     renderHpBars();
@@ -257,7 +257,7 @@ const Game = (() => {
     }
     state.score+=(10+comboDmg)*mult;
 
-    // Heal player saat selesai kata (adil sama seperti lawan)
+    
     const baseHeal = 5;
     const comboHealBonus = Math.min(state.combo - 1, 5) * 2;
     const healAmt = baseHeal + comboHealBonus;
@@ -435,8 +435,7 @@ const Game = (() => {
       if(wpid===myId) return;
       const p=Multiplayer.getPlayers().find(pl=>pl.id===wpid);
       if(p){
-        // Lawan selesai duluan → mereka heal (sudah di-handle via hp_update dari server)
-        // Kita cukup tampilkan notif ke player ini
+       
         Effects.showToast(`${p.avatar||'⚡'} ${p.name} selesai duluan! Mereka +HP, kamu -HP`, 'error', 2000);
         Effects.damageFlash();
       }
