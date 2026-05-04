@@ -41,7 +41,7 @@ const Words = (() => {
     "validasi",
     "egiluy",
     "realita",
-    "kelasking",
+    "bolang",
     "dejavu",
     "prikitiw",
     "friendlly",
