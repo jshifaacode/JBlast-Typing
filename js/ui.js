@@ -10,6 +10,7 @@ const UI = (() => {
       setTimeout(() => t.classList.add("active"), 10);
     }
   }
+  
 
   function buildAvatarGrid() {
     const avs = [
