@@ -8,39 +8,14 @@ const Audio = (() => {
   const BGM_SRC = "assets/yorunikakeru-yoasobi.mp3";
 
   function getCtx() {
-    if (!_ctx) {
-      _ctx = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
     return _ctx;
   }
 
   function resume() {
     try {
-      const ctx = getCtx();
-      if (ctx.state === "suspended") {
-        ctx.resume();
-      }
+      if (getCtx().state === "suspended") getCtx().resume();
     } catch (e) {}
-  }
-
-  function _unlockAndPlay() {
-    resume();
-    if (_pendingPlay && _bgm && !_bgmPlaying) {
-      _doPlay();
-    }
-  }
-
-  function _attachUnlockListeners() {
-    const events = ["touchstart", "touchend", "mousedown", "keydown", "click"];
-    function onUnlock() {
-      _unlockAndPlay();
-      events.forEach(function (ev) {
-        document.removeEventListener(ev, onUnlock, true);
-      });
-    }
-    events.forEach(function (ev) {
-      document.addEventListener(ev, onUnlock, { capture: true, once: true });
-    });
   }
 
   function tone(freq, type, dur, gain) {
@@ -87,14 +62,10 @@ const Audio = (() => {
     _bgm.loop = true;
     _bgm.volume = muted ? 0 : 0.42;
     _bgm.preload = "auto";
-    _bgm.setAttribute("playsinline", "");
-    _bgm.setAttribute("webkit-playsinline", "");
     _bgm.addEventListener("canplaythrough", function onReady() {
       _bgmReady = true;
       _bgm.removeEventListener("canplaythrough", onReady);
-      if (_pendingPlay && !_bgmPlaying) {
-        _doPlay();
-      }
+      if (_pendingPlay && !_bgmPlaying) _doPlay();
     });
     _bgm.addEventListener("error", function () {
       _bgm = null;
@@ -116,8 +87,6 @@ const Audio = (() => {
         _pendingPlay = false;
       }).catch(function () {
         _bgmPlaying = false;
-        _pendingPlay = true;
-        _attachUnlockListeners();
       });
     } else {
       _bgmPlaying = true;
@@ -126,12 +95,12 @@ const Audio = (() => {
   }
 
   function playBgm() {
-    _makeBgm();
+    if (!_bgm) _makeBgm();
     if (!_bgm) return;
-    _bgm.currentTime = 0;
-    _bgm.volume = muted ? 0 : 0.42;
     _bgmPlaying = false;
     _pendingPlay = true;
+    _bgm.currentTime = 0;
+    _bgm.volume = muted ? 0 : 0.42;
     resume();
     if (_bgmReady) {
       _doPlay();
@@ -139,13 +108,13 @@ const Audio = (() => {
   }
 
   function stopBgm(fade) {
+    _pendingPlay = false;
     if (!_bgm) return;
     _bgmPlaying = false;
-    _pendingPlay = false;
     if (fade) {
       const vol = _bgm.volume;
       let v = vol;
-      const step = Math.max(vol / 18, 0.002);
+      const step = vol / 18;
       const iv = setInterval(function () {
         v -= step;
         if (!_bgm) {
@@ -170,12 +139,12 @@ const Audio = (() => {
   }
 
   function resumeBgm() {
-    if (!_bgm) return;
-    if (_bgm.paused) {
-      _pendingPlay = true;
-      _doPlay();
+    if (_bgm && _bgm.paused && _bgmPlaying) {
+      _bgm.play().catch(function () {});
     }
   }
+
+  _makeBgm();
 
   return {
     keyPress: function () {
@@ -250,11 +219,9 @@ const Audio = (() => {
     isMuted: function () {
       return muted;
     },
-    unlock: function () {
+    tryPlayPending: function () {
       resume();
-      if (_pendingPlay && _bgm && !_bgmPlaying) {
-        _doPlay();
-      }
+      if (_pendingPlay && _bgm && !_bgmPlaying) _doPlay();
     },
   };
 })();
