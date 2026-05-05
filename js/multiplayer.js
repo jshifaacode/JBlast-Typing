@@ -1,89 +1,101 @@
-const FIREBASE_URL = "https://jblast-typing-default-rtdb.firebaseio.com";
+var FIREBASE_URL = "https://jblast-typing-default-rtdb.firebaseio.com";
 
-const Multiplayer = (() => {
-  let room = null,
+var Multiplayer = (function () {
+  var room = null,
     pid = null,
     isHost = false,
     players = {},
     cbs = {};
-  let _ls = [],
+  var _ls = [],
     _bots = [],
     _poll = null,
     _lastSnap = "",
     _lastStatus = "";
+  var PLAYER_MAX_HP = 200;
 
-  const PLAYER_MAX_HP = 200;
-
-  const genCode = () => {
-    const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let r = "";
-    for (let i = 0; i < 5; i++) r += c[Math.floor(Math.random() * c.length)];
+  function genCode() {
+    var c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+      r = "";
+    for (var i = 0; i < 5; i++) r += c[Math.floor(Math.random() * c.length)];
     return r;
-  };
-  const genId = () => Math.random().toString(36).substr(2, 9);
-  const on = (ev, cb) => (cbs[ev] = cb);
-  const emit = (ev, d) => cbs[ev] && cbs[ev](d);
+  }
 
-  async function get(path) {
-    try {
-      const r = await fetch(`${FIREBASE_URL}/${path}.json`, {
-        cache: "no-store",
-      });
-      return await r.json();
-    } catch (_) {
-      return null;
-    }
+  function genId() {
+    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
   }
-  async function set(path, d) {
-    try {
-      await fetch(`${FIREBASE_URL}/${path}.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(d),
-      });
-    } catch (_) {}
+
+  function on(ev, cb) {
+    cbs[ev] = cb;
   }
-  async function upd(path, d) {
-    try {
-      await fetch(`${FIREBASE_URL}/${path}.json`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(d),
-      });
-    } catch (_) {}
+  function emit(ev, d) {
+    if (cbs[ev]) cbs[ev](d);
   }
-  async function del(path) {
-    try {
-      await fetch(`${FIREBASE_URL}/${path}.json`, { method: "DELETE" });
-    } catch (_) {}
+
+  function _fetch(path, opts) {
+    return fetch(
+      FIREBASE_URL + "/" + path + ".json",
+      opts || { cache: "no-store" },
+    )
+      .then(function (r) {
+        return r.json();
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function dbGet(path) {
+    return _fetch(path);
+  }
+
+  function dbSet(path, d) {
+    return _fetch(path, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(d),
+    }).catch(function () {});
+  }
+
+  function dbUpd(path, d) {
+    return _fetch(path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(d),
+    }).catch(function () {});
+  }
+
+  function dbDel(path) {
+    return fetch(FIREBASE_URL + "/" + path + ".json", {
+      method: "DELETE",
+    }).catch(function () {});
   }
 
   function listen(path, cb) {
     if (typeof EventSource === "undefined") return;
     try {
-      const es = new EventSource(`${FIREBASE_URL}/${path}.json`);
-      es.addEventListener("put", (e) => {
+      var es = new EventSource(FIREBASE_URL + "/" + path + ".json");
+      es.addEventListener("put", function (e) {
         try {
-          const d = JSON.parse(e.data);
+          var d = JSON.parse(e.data);
           cb(d.data, d.path || "/");
-        } catch (_) {}
+        } catch (x) {}
       });
-      es.addEventListener("patch", (e) => {
+      es.addEventListener("patch", function (e) {
         try {
-          const d = JSON.parse(e.data);
+          var d = JSON.parse(e.data);
           cb(d.data, d.path || "/");
-        } catch (_) {}
+        } catch (x) {}
       });
-      es.onerror = () => {};
+      es.onerror = function () {};
       _ls.push(es);
-    } catch (_) {}
+    } catch (x) {}
   }
 
   function stopListeners() {
-    _ls.forEach((es) => {
+    _ls.forEach(function (es) {
       try {
         es.close();
-      } catch (_) {}
+      } catch (x) {}
     });
     _ls = [];
     if (_poll) {
@@ -93,25 +105,45 @@ const Multiplayer = (() => {
   }
 
   function startPoll(code) {
-    _poll = setInterval(async () => {
-      const r = await get(`rooms/${code}`);
-      if (!r) return;
-      const snap = JSON.stringify(r.players || {});
-      if (snap !== _lastSnap) {
-        _lastSnap = snap;
-        players = r.players || {};
-        emit("players_update", { players: Object.values(players) });
-        _updateLobby();
-      }
-      if (!isHost && r.status === "playing" && _lastStatus !== "playing") {
-        _lastStatus = "playing";
-        if (r.currentWord)
-          emit("game_start", {
-            word: r.currentWord,
+    if (_poll) {
+      clearInterval(_poll);
+      _poll = null;
+    }
+    _poll = setInterval(function () {
+      dbGet("rooms/" + code).then(function (r) {
+        if (!r) return;
+        var snap = JSON.stringify(r.players || {});
+        if (snap !== _lastSnap) {
+          _lastSnap = snap;
+          players = r.players || {};
+          emit("players_update", { players: Object.values(players) });
+          _updateLobby();
+        }
+        if (!isHost && r.status === "playing" && _lastStatus !== "playing") {
+          _lastStatus = "playing";
+          if (r.currentWord)
+            emit("game_start", {
+              word: r.currentWord,
+              players: Object.values(players),
+            });
+        }
+        if (r.status === "lobby" && _lastStatus === "playing") {
+          _lastStatus = "lobby";
+        }
+        if (r.status) _lastStatus = r.status;
+
+        if (
+          r.rematchWord &&
+          r.rematchWord !== "" &&
+          _lastStatus !== "rematch_" + r.rematchWord
+        ) {
+          _lastStatus = "rematch_" + r.rematchWord;
+          emit("rematch_start", {
+            word: r.rematchWord,
             players: Object.values(players),
           });
-      }
-      if (r.status) _lastStatus = r.status;
+        }
+      });
     }, 1200);
   }
 
@@ -130,65 +162,88 @@ const Multiplayer = (() => {
     };
   }
 
-  async function createRoom(p) {
+  function createRoom(p) {
     p.id = p.id || genId();
     pid = p.id;
     isHost = true;
-    const code = genCode();
+    var code = genCode();
     room = code;
-    const data = {
-      code,
+    var data = {
+      code: code,
       host: pid,
       status: "lobby",
       createdAt: Date.now(),
-      players: { [pid]: _entry(p) },
+      players: {},
       currentWord: "",
+      rematchWord: "",
       events: {},
     };
-    await set(`rooms/${code}`, data);
-    players = { [pid]: _entry(p) };
-    _listen(code);
-    startPoll(code);
-    window.addEventListener("beforeunload", () =>
-      navigator.sendBeacon(
-        `${FIREBASE_URL}/rooms/${code}/players/${pid}/online.json`,
-        JSON.stringify(false),
-      ),
-    );
-    return { roomCode: code, players: Object.values(players) };
+    data.players[pid] = _entry(p);
+    return dbSet("rooms/" + code, data).then(function () {
+      players = {};
+      players[pid] = _entry(p);
+      _listenRoom(code);
+      startPoll(code);
+      window.addEventListener("beforeunload", function () {
+        try {
+          navigator.sendBeacon(
+            FIREBASE_URL +
+              "/rooms/" +
+              code +
+              "/players/" +
+              pid +
+              "/online.json",
+            JSON.stringify(false),
+          );
+        } catch (x) {}
+      });
+      return { roomCode: code, players: Object.values(players) };
+    });
   }
 
-  async function joinRoom(code, p) {
+  function joinRoom(code, p) {
     code = code.toUpperCase();
-    const r = await get(`rooms/${code}`);
-    if (!r) {
-      Effects.showToast("ROOM TIDAK DITEMUKAN!", "error");
-      return null;
-    }
-    if (r.status === "playing") {
-      Effects.showToast("GAME SUDAH BERJALAN!", "error");
-      return null;
-    }
-    p.id = p.id || genId();
-    pid = p.id;
-    isHost = false;
-    room = code;
-    await set(`rooms/${code}/players/${pid}`, _entry(p));
-    const all = await get(`rooms/${code}/players`);
-    players = all || {};
-    _listen(code);
-    startPoll(code);
-    window.addEventListener("beforeunload", () =>
-      navigator.sendBeacon(
-        `${FIREBASE_URL}/rooms/${code}/players/${pid}/online.json`,
-        JSON.stringify(false),
-      ),
-    );
-    return { roomCode: code, players: Object.values(players) };
+    return dbGet("rooms/" + code).then(function (r) {
+      if (!r) {
+        Effects.showToast("ROOM TIDAK DITEMUKAN!", "error");
+        return null;
+      }
+      if (r.status === "playing") {
+        Effects.showToast("GAME SEDANG BERLANGSUNG!", "error");
+        return null;
+      }
+      p.id = p.id || genId();
+      pid = p.id;
+      isHost = false;
+      room = code;
+      return dbSet("rooms/" + code + "/players/" + pid, _entry(p))
+        .then(function () {
+          return dbGet("rooms/" + code + "/players");
+        })
+        .then(function (all) {
+          players = all || {};
+          _listenRoom(code);
+          startPoll(code);
+          window.addEventListener("beforeunload", function () {
+            try {
+              navigator.sendBeacon(
+                FIREBASE_URL +
+                  "/rooms/" +
+                  code +
+                  "/players/" +
+                  pid +
+                  "/online.json",
+                JSON.stringify(false),
+              );
+            } catch (x) {}
+          });
+          return { roomCode: code, players: Object.values(players) };
+        });
+    });
   }
 
-  function _listen(code) {
-    listen(`rooms/${code}/players`, (data, path) => {
+  function _listenRoom(code) {
+    listen("rooms/" + code + "/players", function (data, path) {
       if (!data && path === "/") return;
       if (path === "/" || path === "") {
         if (data && typeof data === "object") {
@@ -197,40 +252,50 @@ const Multiplayer = (() => {
           _updateLobby();
         }
       } else {
-        const parts = path.replace(/^\//, "").split("/");
-        const p2 = parts[0];
+        var parts = path.replace(/^\//, "").split("/");
+        var p2 = parts[0];
         if (!p2) return;
-        if (data === null) delete players[p2];
-        else if (typeof data === "object")
-          players[p2] = { ...(players[p2] || {}), ...data };
-        else if (parts.length > 1) {
+        if (data === null) {
+          delete players[p2];
+        } else if (typeof data === "object") {
+          players[p2] = Object.assign({}, players[p2] || {}, data);
+        } else if (parts.length > 1) {
           if (!players[p2]) players[p2] = {};
           players[p2][parts[1]] = data;
         }
         emit("players_update", { players: Object.values(players) });
         emit("player_progress", {
           playerId: p2,
-          progress: players[p2]?.progress || 0,
-          wpm: players[p2]?.wpm || 0,
+          progress: (players[p2] && players[p2].progress) || 0,
+          wpm: (players[p2] && players[p2].wpm) || 0,
         });
         emit("hp_update", {
           playerId: p2,
-          hp: players[p2]?.hp ?? PLAYER_MAX_HP,
+          hp:
+            players[p2] && players[p2].hp !== undefined
+              ? players[p2].hp
+              : PLAYER_MAX_HP,
         });
         _updateLobby();
       }
     });
 
-    listen(`rooms/${code}/status`, (data) => {
+    listen("rooms/" + code + "/status", function (data) {
       if (data === "playing" && !isHost) {
-        get(`rooms/${code}/currentWord`).then((w) => {
+        dbGet("rooms/" + code + "/currentWord").then(function (w) {
           if (w)
             emit("game_start", { word: w, players: Object.values(players) });
         });
       }
     });
 
-    listen(`rooms/${code}/events`, (data, path) => {
+    listen("rooms/" + code + "/rematchWord", function (data) {
+      if (data && data !== "") {
+        emit("rematch_start", { word: data, players: Object.values(players) });
+      }
+    });
+
+    listen("rooms/" + code + "/events", function (data, path) {
       if (!data || path === "/" || path === "") return;
       if (typeof data === "object" && data.type && data.from !== pid)
         _handleEv(data);
@@ -247,94 +312,135 @@ const Multiplayer = (() => {
   }
 
   function _updateLobby() {
-    const grid = document.getElementById("lobbyPlayers");
+    var grid = document.getElementById("lobbyPlayers");
     if (!grid) return;
     grid.innerHTML = Object.values(players)
-      .map(
-        (p) =>
-          `<div class="lpc ready"><div class="lpc-avatar">${p.avatar || "⚡"}</div><div class="lpc-name bb">${p.name}${p.id === pid ? " (YOU)" : ""}</div><div class="lpc-status" style="color:var(--g)">READY ✓</div></div>`,
-      )
+      .map(function (p) {
+        return (
+          '<div class="lpc ready"><div class="lpc-avatar">' +
+          (p.avatar || "⚡") +
+          '</div><div class="lpc-name bb">' +
+          p.name +
+          (p.id === pid ? " (YOU)" : "") +
+          '</div><div class="lpc-status" style="color:var(--g)">READY ✓</div></div>'
+        );
+      })
       .join("");
-    const st = document.getElementById("lobbyStatus");
+    var st = document.getElementById("lobbyStatus");
     if (st) st.textContent = Object.keys(players).length + " PILOT(S) IN LOBBY";
   }
 
-  async function startGame() {
-    if (!isHost || !room) return;
-    const word = Words.getByWave(1);
-    await upd(`rooms/${room}`, {
+  function startGame() {
+    if (!isHost || !room) return Promise.resolve();
+    var word = Words.getByWave(1);
+    return dbUpd("rooms/" + room, {
       status: "playing",
       currentWord: word,
+      rematchWord: "",
       startedAt: Date.now(),
+    }).then(function () {
+      emit("game_start", { word: word, players: Object.values(players) });
     });
-    emit("game_start", { word, players: Object.values(players) });
   }
 
-  async function sendProgress(progress, wpm) {
-    if (!room || !pid) return;
+  function startRematch() {
+    if (!isHost || !room) return Promise.resolve();
+    var word = Words.getByWave(1);
+    Object.values(players).forEach(function (p) {
+      p.hp = PLAYER_MAX_HP;
+      p.wpm = 0;
+      p.progress = 0;
+    });
+    var updates = {
+      status: "playing",
+      currentWord: word,
+      rematchWord: word,
+      startedAt: Date.now(),
+    };
+    Object.values(players).forEach(function (p) {
+      updates["players/" + p.id + "/hp"] = PLAYER_MAX_HP;
+      updates["players/" + p.id + "/wpm"] = 0;
+      updates["players/" + p.id + "/progress"] = 0;
+    });
+    return dbUpd("rooms/" + room, updates).then(function () {
+      emit("rematch_start", { word: word, players: Object.values(players) });
+    });
+  }
+
+  function sendProgress(progress, wpm) {
+    if (!room || !pid) return Promise.resolve();
     if (players[pid]) {
       players[pid].progress = progress;
       players[pid].wpm = wpm;
     }
-    emit("player_progress", { playerId: pid, progress, wpm });
-    await upd(`rooms/${room}/players/${pid}`, { progress, wpm });
+    emit("player_progress", { playerId: pid, progress: progress, wpm: wpm });
+    return dbUpd("rooms/" + room + "/players/" + pid, {
+      progress: progress,
+      wpm: wpm,
+    });
   }
 
-  async function sendTyping() {
-    if (!room || !pid) return;
-    emit("player_typing", { playerId: pid, name: players[pid]?.name });
-    const id = Date.now().toString(36);
-    await set(`rooms/${room}/events/${id}`, {
+  function sendTyping() {
+    if (!room || !pid) return Promise.resolve();
+    emit("player_typing", {
+      playerId: pid,
+      name: players[pid] && players[pid].name,
+    });
+    var id = Date.now().toString(36);
+    return dbSet("rooms/" + room + "/events/" + id, {
       type: "typing",
       from: pid,
-      name: players[pid]?.name || "?",
+      name: (players[pid] && players[pid].name) || "?",
       ts: Date.now(),
     });
   }
 
-  async function sendDamage(targetId, amount) {
-    if (!room || !pid) return;
-    const id = Date.now().toString(36) + "_d";
-    await set(`rooms/${room}/events/${id}`, {
+  function sendDamage(targetId, amount) {
+    if (!room || !pid) return Promise.resolve();
+    var id = Date.now().toString(36) + "_d";
+    return dbSet("rooms/" + room + "/events/" + id, {
       type: "damage",
       from: pid,
       to: targetId,
-      amount,
+      amount: amount,
       ts: Date.now(),
     });
   }
 
-  async function updatePlayerHp(p, hp) {
-    if (!room) return;
-    const safeHp = Math.max(0, Math.min(PLAYER_MAX_HP, hp));
-    if (players[p]) players[p].hp = safeHp;
-    emit("hp_update", { playerId: p, hp: safeHp });
-    await upd(`rooms/${room}/players/${p}`, { hp: safeHp });
+  function updatePlayerHp(playerId, hp) {
+    if (!room) return Promise.resolve();
+    var safeHp = Math.max(0, Math.min(PLAYER_MAX_HP, hp));
+    if (players[playerId]) players[playerId].hp = safeHp;
+    emit("hp_update", { playerId: playerId, hp: safeHp });
+    return dbUpd("rooms/" + room + "/players/" + playerId, { hp: safeHp });
   }
 
-  async function leaveRoom() {
+  function leaveRoom() {
     stopBots();
     stopListeners();
     if (room && pid) {
-      await del(`rooms/${room}/players/${pid}`);
-      if (isHost) await del(`rooms/${room}`);
+      dbDel("rooms/" + room + "/players/" + pid);
+      if (isHost) dbDel("rooms/" + room);
     }
     room = null;
     players = {};
     isHost = false;
+    _lastStatus = "";
+    _lastSnap = "";
     emit("left_room", {});
+    return Promise.resolve();
   }
 
   function startBotSimulation(word) {
     _bots.forEach(clearInterval);
     _bots = [];
-    Object.values(players).forEach((p) => {
+    Object.values(players).forEach(function (p) {
       if (!p.isBot) return;
-      let idx = 0;
-      const total = word.replace(/ /g, "").length;
-      const baseDelay = Math.floor(1000 / (p.speed * 4));
-      const iv = setInterval(
-        () => {
+      var idx = 0;
+      var total = word.replace(/ /g, "").length || 1;
+      var baseDelay = Math.floor(1000 / (p.speed * 4));
+      var iv = setInterval(
+        function () {
           if (idx >= total) {
             clearInterval(iv);
             emit("player_word_complete", {
@@ -362,7 +468,6 @@ const Multiplayer = (() => {
     _bots.forEach(clearInterval);
     _bots = [];
   }
-
   function getPlayers() {
     return Object.values(players);
   }
@@ -383,22 +488,23 @@ const Multiplayer = (() => {
   }
 
   return {
-    on,
-    generatePlayerId,
-    createRoom,
-    joinRoom,
-    startGame,
-    startBotSimulation,
-    stopBots,
-    sendProgress,
-    sendTyping,
-    sendDamage,
-    updatePlayerHp,
-    leaveRoom,
-    getPlayers,
-    getPlayer,
-    getCurrentRoom,
-    getIsHost,
-    getPlayerId,
+    on: on,
+    generatePlayerId: generatePlayerId,
+    createRoom: createRoom,
+    joinRoom: joinRoom,
+    startGame: startGame,
+    startRematch: startRematch,
+    startBotSimulation: startBotSimulation,
+    stopBots: stopBots,
+    sendProgress: sendProgress,
+    sendTyping: sendTyping,
+    sendDamage: sendDamage,
+    updatePlayerHp: updatePlayerHp,
+    leaveRoom: leaveRoom,
+    getPlayers: getPlayers,
+    getPlayer: getPlayer,
+    getCurrentRoom: getCurrentRoom,
+    getIsHost: getIsHost,
+    getPlayerId: getPlayerId,
   };
 })();
