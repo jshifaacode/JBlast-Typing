@@ -82,7 +82,7 @@ var App = (function () {
     _setupScreen(isMobile(), inp, kb);
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "none";
-    Audio.unlock();
+    Audio.tryPlayPending();
     Audio.playBgm();
     Game.init("solo", p.skin);
   }
@@ -101,7 +101,7 @@ var App = (function () {
     var kb = document.getElementById("mobileKeyboard");
     var inp = document.getElementById("gameInput");
     _setupScreen(isMobile(), inp, kb);
-    Audio.unlock();
+    Audio.tryPlayPending();
     Audio.playBgm();
     Game.init("multiplayer", p.skin, firstWord);
     Game.setupMultiplayer();
@@ -138,6 +138,7 @@ var App = (function () {
     }
 
     g("btnEnterGame").addEventListener("click", function () {
+      Audio.tryPlayPending();
       Audio.keyPress();
       var p = getProfile();
       if (p.name) {
@@ -179,14 +180,17 @@ var App = (function () {
     });
 
     g("btnSolo").addEventListener("click", function () {
+      Audio.tryPlayPending();
       Audio.keyPress();
       startSolo();
     });
     g("btnMultiplayer").addEventListener("click", function () {
+      Audio.tryPlayPending();
       Audio.keyPress();
       UI.showScreen("screen-multiplayer");
     });
     g("btnStats").addEventListener("click", function () {
+      Audio.tryPlayPending();
       Audio.keyPress();
       var p = getProfile();
       UI.buildStats(p.stats || {});
@@ -201,6 +205,7 @@ var App = (function () {
     });
 
     g("btnEditProfile").addEventListener("click", function () {
+      Audio.tryPlayPending();
       Audio.keyPress();
       var p = getProfile();
       UI.showScreen("screen-login");
@@ -231,6 +236,7 @@ var App = (function () {
     });
 
     g("btnLogout").addEventListener("click", function () {
+      Audio.tryPlayPending();
       Audio.keyPress();
       if (confirm("Logout dan hapus profil kamu?")) {
         localStorage.removeItem(KEY);
@@ -243,6 +249,7 @@ var App = (function () {
     });
 
     g("btnCreateRoom").addEventListener("click", function () {
+      Audio.tryPlayPending();
       var p = getProfile();
       p.id = p.id || Multiplayer.generatePlayerId();
       saveProfile(p);
@@ -281,6 +288,7 @@ var App = (function () {
     });
 
     g("btnJoinRoom").addEventListener("click", function () {
+      Audio.tryPlayPending();
       var code = (g("inputRoomCode").value || "").trim().toUpperCase();
       if (code.length < 4) {
         Effects.showToast("Kode minimal 4 karakter!", "error");
@@ -343,6 +351,7 @@ var App = (function () {
     });
 
     g("btnStartMatch").addEventListener("click", function () {
+      Audio.tryPlayPending();
       Multiplayer.startGame().then(function () {
         startMpGame();
       });
@@ -395,6 +404,7 @@ var App = (function () {
     });
 
     g("btnPlayAgain").addEventListener("click", function () {
+      Audio.tryPlayPending();
       var st = Game.getState();
       if (st.mode === "multiplayer") {
         if (_mpIsHost && _mpRoomCode) {
@@ -469,12 +479,16 @@ var App = (function () {
 
     function unlock() {
       try {
-        new (window.AudioContext || window.webkitAudioContext)().resume();
+        if (window.AudioContext || window.webkitAudioContext) {
+          var ctx = new (window.AudioContext || window.webkitAudioContext)();
+          ctx.resume();
+        }
       } catch (x) {}
-      Audio.unlock();
+      Audio.tryPlayPending();
     }
     document.addEventListener("click", unlock, { once: true });
     document.addEventListener("touchstart", unlock, { once: true });
+    document.addEventListener("touchend", unlock, { once: true });
     document.addEventListener("keydown", unlock, { once: true });
   }
 
