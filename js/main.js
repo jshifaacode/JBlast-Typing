@@ -1,10 +1,12 @@
-const App = (() => {
-  let profile = null;
-  const KEY = "keystorm_v2";
+var App = (function () {
+  var profile = null;
+  var KEY = "keystorm_v2";
+  var _mpRoomCode = null;
+  var _mpIsHost = false;
 
   function getProfile() {
     if (!profile) {
-      const s = localStorage.getItem(KEY);
+      var s = localStorage.getItem(KEY);
       profile = s
         ? JSON.parse(s)
         : {
@@ -25,34 +27,34 @@ const App = (() => {
   }
 
   function bootSequence() {
-    const lines = [
+    var lines = [
       "> JBLASTTYPING OS v3.0 LOADING...",
       "> NEURAL TYPING ENGINE: ONLINE",
       "> COMBAT PROTOCOLS: ACTIVATED",
       "> MULTIPLAYER STACK: READY",
       "> AUDIO SUBSYSTEM: INITIALIZED",
       "> ENEMY WAVES INCOMING...",
-      "> SELAMAT DATANG.",
+      "> SELAMAT DATANG, PILOT.",
     ];
-    const el = document.getElementById("bootLines");
-    const btn = document.getElementById("btnEnterGame");
-    let i = 0;
+    var el = document.getElementById("bootLines");
+    var btn = document.getElementById("btnEnterGame");
+    var i = 0;
     function add() {
       if (i >= lines.length) {
-        setTimeout(() => {
+        setTimeout(function () {
           if (btn) btn.style.display = "block";
         }, 300);
         return;
       }
       el.textContent += lines[i] + "\n";
       i++;
-      setTimeout(add, 270 + Math.random() * 160);
+      setTimeout(add, 260 + Math.random() * 160);
     }
     add();
   }
 
-  function _setupGameScreen(isMob, inp, kb) {
-    if (isMob) {
+  function _setupScreen(mob, inp, kb) {
+    if (mob) {
       buildMobileKeyboard();
       if (inp) {
         inp.style.opacity = "0";
@@ -66,65 +68,78 @@ const App = (() => {
         inp.style.position = "";
         inp.style.pointerEvents = "";
       }
-      setTimeout(() => inp && inp.focus(), 120);
+      setTimeout(function () {
+        if (inp) inp.focus();
+      }, 140);
     }
   }
 
   function startSolo() {
-    const p = getProfile();
+    var p = getProfile();
     UI.showScreen("screen-game");
-    const kb = document.getElementById("mobileKeyboard");
-    const inp = document.getElementById("gameInput");
-    _setupGameScreen(isMobile(), inp, kb);
-    document.getElementById("mpSidebar").style.display = "none";
+    var kb = document.getElementById("mobileKeyboard");
+    var inp = document.getElementById("gameInput");
+    _setupScreen(isMobile(), inp, kb);
+    var sb = document.getElementById("mpSidebar");
+    if (sb) sb.style.display = "none";
+    Audio.unlock();
     Audio.playBgm();
     Game.init("solo", p.skin);
   }
 
   function startMpGame(firstWord) {
-    const st = Game.getState();
+    var st = Game.getState();
     if (
-      document.getElementById("screen-game")?.classList.contains("active") &&
+      document.getElementById("screen-game") &&
+      document.getElementById("screen-game").classList.contains("active") &&
       st.running
     )
       return;
-    const p = getProfile();
+
+    var p = getProfile();
     UI.showScreen("screen-game");
-    const kb = document.getElementById("mobileKeyboard");
-    const inp = document.getElementById("gameInput");
-    _setupGameScreen(isMobile(), inp, kb);
+    var kb = document.getElementById("mobileKeyboard");
+    var inp = document.getElementById("gameInput");
+    _setupScreen(isMobile(), inp, kb);
+    Audio.unlock();
     Audio.playBgm();
     Game.init("multiplayer", p.skin, firstWord);
     Game.setupMultiplayer();
   }
 
-  function stopGameBgm() {
-    Audio.stopBgm(true);
-  }
-
   function buildLobby(players, isHost, roomCode) {
-    const g = (n) => document.getElementById(n);
+    function g(n) {
+      return document.getElementById(n);
+    }
     if (g("lobbyCode")) g("lobbyCode").textContent = roomCode;
     if (g("btnStartMatch"))
       g("btnStartMatch").style.display = isHost ? "block" : "none";
     if (g("lobbyStatus"))
       g("lobbyStatus").textContent = players.length + " PILOT(S) IN LOBBY";
-    const grid = g("lobbyPlayers");
-    if (grid)
+    var grid = g("lobbyPlayers");
+    if (grid) {
       grid.innerHTML = players
-        .map(
-          (p) =>
-            `<div class="lpc ready"><div class="lpc-avatar">${p.avatar || "⚡"}</div><div class="lpc-name bb">${p.name}</div><div class="lpc-status" style="color:var(--g)">READY</div></div>`,
-        )
+        .map(function (p) {
+          return (
+            '<div class="lpc ready"><div class="lpc-avatar">' +
+            (p.avatar || "⚡") +
+            '</div><div class="lpc-name bb">' +
+            p.name +
+            '</div><div class="lpc-status" style="color:var(--g)">READY</div></div>'
+          );
+        })
         .join("");
+    }
   }
 
   function bindEvents() {
-    const g = (n) => document.getElementById(n);
+    function g(n) {
+      return document.getElementById(n);
+    }
 
-    g("btnEnterGame").addEventListener("click", () => {
+    g("btnEnterGame").addEventListener("click", function () {
       Audio.keyPress();
-      const p = getProfile();
+      var p = getProfile();
       if (p.name) {
         UI.updateMenuDisplay(p);
         UI.showScreen("screen-menu");
@@ -135,18 +150,21 @@ const App = (() => {
       }
     });
 
-    g("btnConfirmLogin").addEventListener("click", () => {
-      const name = (g("inputUsername").value || "").trim();
+    g("btnConfirmLogin").addEventListener("click", function () {
+      var name = (g("inputUsername").value || "").trim();
       if (!name) {
         Effects.showToast("Masukkan callsign dulu!", "error");
         return;
       }
-      const avatar =
-        document.querySelector(".avatar-item.selected")?.dataset.avatar || "⚡";
-      const skin =
-        document.querySelector(".skin-option.selected")?.dataset.skin ||
+      var avatar =
+        ((document.querySelector(".avatar-item.selected") || {}).dataset &&
+          document.querySelector(".avatar-item.selected").dataset.avatar) ||
+        "⚡";
+      var skin =
+        ((document.querySelector(".skin-opt.selected") || {}).dataset &&
+          document.querySelector(".skin-opt.selected").dataset.skin) ||
         "default";
-      const p = getProfile();
+      var p = getProfile();
       p.name = name;
       p.avatar = avatar;
       p.skin = skin;
@@ -156,63 +174,63 @@ const App = (() => {
       UI.showScreen("screen-menu");
     });
 
-    g("inputUsername").addEventListener("keydown", (e) => {
+    g("inputUsername").addEventListener("keydown", function (e) {
       if (e.key === "Enter") g("btnConfirmLogin").click();
     });
 
-    g("btnSolo").addEventListener("click", () => {
+    g("btnSolo").addEventListener("click", function () {
       Audio.keyPress();
       startSolo();
     });
-    g("btnMultiplayer").addEventListener("click", () => {
+    g("btnMultiplayer").addEventListener("click", function () {
       Audio.keyPress();
       UI.showScreen("screen-multiplayer");
     });
-    g("btnStats").addEventListener("click", () => {
+    g("btnStats").addEventListener("click", function () {
       Audio.keyPress();
-      const p = getProfile();
+      var p = getProfile();
       UI.buildStats(p.stats || {});
       UI.showScreen("screen-stats");
     });
 
-    g("btnBackFromMP").addEventListener("click", () =>
-      UI.showScreen("screen-menu"),
-    );
-    g("btnBackFromStats").addEventListener("click", () =>
-      UI.showScreen("screen-menu"),
-    );
+    g("btnBackFromMP").addEventListener("click", function () {
+      UI.showScreen("screen-menu");
+    });
+    g("btnBackFromStats").addEventListener("click", function () {
+      UI.showScreen("screen-menu");
+    });
 
-    g("btnEditProfile").addEventListener("click", () => {
+    g("btnEditProfile").addEventListener("click", function () {
       Audio.keyPress();
-      const p = getProfile();
+      var p = getProfile();
       UI.showScreen("screen-login");
       UI.buildAvatarGrid();
       UI.buildSkinOptions();
-      const inp = g("inputUsername");
+      var inp = g("inputUsername");
       if (inp) inp.value = p.name || "";
-      setTimeout(() => {
-        const ca = document.querySelector(
-          `.avatar-item[data-avatar="${p.avatar}"]`,
+      setTimeout(function () {
+        var ca = document.querySelector(
+          '.avatar-item[data-avatar="' + p.avatar + '"]',
         );
         if (ca) {
-          document
-            .querySelectorAll(".avatar-item")
-            .forEach((o) => o.classList.remove("selected"));
+          document.querySelectorAll(".avatar-item").forEach(function (o) {
+            o.classList.remove("selected");
+          });
           ca.classList.add("selected");
         }
-        const cs = document.querySelector(
-          `.skin-option[data-skin="${p.skin}"]`,
+        var cs = document.querySelector(
+          '.skin-opt[data-skin="' + p.skin + '"]',
         );
         if (cs) {
-          document
-            .querySelectorAll(".skin-option")
-            .forEach((o) => o.classList.remove("selected"));
+          document.querySelectorAll(".skin-opt").forEach(function (o) {
+            o.classList.remove("selected");
+          });
           cs.classList.add("selected");
         }
       }, 60);
     });
 
-    g("btnLogout").addEventListener("click", () => {
+    g("btnLogout").addEventListener("click", function () {
       Audio.keyPress();
       if (confirm("Logout dan hapus profil kamu?")) {
         localStorage.removeItem(KEY);
@@ -224,79 +242,97 @@ const App = (() => {
       }
     });
 
-    g("btnCreateRoom").addEventListener("click", async () => {
-      const p = getProfile();
+    g("btnCreateRoom").addEventListener("click", function () {
+      var p = getProfile();
       p.id = p.id || Multiplayer.generatePlayerId();
       saveProfile(p);
       g("btnCreateRoom").disabled = true;
       g("btnCreateRoom").textContent = "CREATING...";
-      const r = await Multiplayer.createRoom({
+      Multiplayer.createRoom({
         id: p.id,
         name: p.name,
         avatar: p.avatar,
         hp: 200,
         wpm: 0,
         progress: 0,
+      }).then(function (r) {
+        g("btnCreateRoom").disabled = false;
+        g("btnCreateRoom").textContent = "CREATE";
+        if (!r) {
+          Effects.showToast("Gagal buat room!", "error");
+          return;
+        }
+        _mpRoomCode = r.roomCode;
+        _mpIsHost = true;
+        buildLobby(r.players, true, r.roomCode);
+        UI.showScreen("screen-lobby");
+        Effects.showToast("Room dibuat! Share kode ke teman.", "success");
+
+        Multiplayer.on("game_start", function (data) {
+          startMpGame(data.word);
+        });
+        Multiplayer.on("rematch_start", function (data) {
+          startMpGame(data.word);
+        });
+        Multiplayer.on("players_update", function (data) {
+          buildLobby(data.players, true, r.roomCode);
+        });
       });
-      g("btnCreateRoom").disabled = false;
-      g("btnCreateRoom").textContent = "CREATE";
-      if (!r) {
-        Effects.showToast("Gagal buat room!", "error");
-        return;
-      }
-      buildLobby(r.players, true, r.roomCode);
-      UI.showScreen("screen-lobby");
-      Effects.showToast("Room dibuat! Share kode ke teman.", "success");
-      Multiplayer.on("game_start", ({ word }) => startMpGame(word));
-      Multiplayer.on("players_update", ({ players }) =>
-        buildLobby(players, true, r.roomCode),
-      );
     });
 
-    g("btnJoinRoom").addEventListener("click", async () => {
-      const code = (g("inputRoomCode").value || "").trim().toUpperCase();
+    g("btnJoinRoom").addEventListener("click", function () {
+      var code = (g("inputRoomCode").value || "").trim().toUpperCase();
       if (code.length < 4) {
         Effects.showToast("Kode minimal 4 karakter!", "error");
         return;
       }
-      const p = getProfile();
+      var p = getProfile();
       p.id = p.id || Multiplayer.generatePlayerId();
       saveProfile(p);
       g("btnJoinRoom").disabled = true;
       g("btnJoinRoom").textContent = "JOINING...";
-      const r = await Multiplayer.joinRoom(code, {
+      Multiplayer.joinRoom(code, {
         id: p.id,
         name: p.name,
         avatar: p.avatar,
         hp: 200,
         wpm: 0,
         progress: 0,
+      }).then(function (r) {
+        g("btnJoinRoom").disabled = false;
+        g("btnJoinRoom").textContent = "JOIN";
+        if (!r) return;
+        _mpRoomCode = r.roomCode;
+        _mpIsHost = false;
+        buildLobby(r.players, false, r.roomCode);
+        UI.showScreen("screen-lobby");
+        Effects.showToast(
+          "Joined " + r.roomCode + "! Tunggu host start.",
+          "success",
+        );
+
+        Multiplayer.on("game_start", function (data) {
+          startMpGame(data.word);
+        });
+        Multiplayer.on("rematch_start", function (data) {
+          startMpGame(data.word);
+        });
+        Multiplayer.on("players_update", function (data) {
+          buildLobby(data.players, false, r.roomCode);
+        });
       });
-      g("btnJoinRoom").disabled = false;
-      g("btnJoinRoom").textContent = "JOIN";
-      if (!r) return;
-      buildLobby(r.players, false, r.roomCode);
-      UI.showScreen("screen-lobby");
-      Effects.showToast(
-        "Joined " + r.roomCode + "! Tunggu host start.",
-        "success",
-      );
-      Multiplayer.on("game_start", ({ word }) => startMpGame(word));
-      Multiplayer.on("players_update", ({ players }) =>
-        buildLobby(players, false, r.roomCode),
-      );
     });
 
     g("inputRoomCode").addEventListener("input", function () {
       this.value = this.value.toUpperCase();
     });
 
-    g("btnCopyCode").addEventListener("click", () => {
-      const code = g("lobbyCode").textContent;
+    g("btnCopyCode").addEventListener("click", function () {
+      var code = g("lobbyCode").textContent;
       if (navigator.clipboard) {
-        navigator.clipboard.writeText(code).catch(() => {});
+        navigator.clipboard.writeText(code).catch(function () {});
       } else {
-        const ta = document.createElement("textarea");
+        var ta = document.createElement("textarea");
         ta.value = code;
         document.body.appendChild(ta);
         ta.select();
@@ -306,73 +342,120 @@ const App = (() => {
       Effects.showToast("Kode disalin: " + code, "success");
     });
 
-    g("btnStartMatch").addEventListener("click", async () => {
-      await Multiplayer.startGame();
-      startMpGame();
+    g("btnStartMatch").addEventListener("click", function () {
+      Multiplayer.startGame().then(function () {
+        startMpGame();
+      });
     });
 
-    g("btnLeaveLobby").addEventListener("click", async () => {
-      await Multiplayer.leaveRoom();
-      stopGameBgm();
-      UI.showScreen("screen-menu");
+    g("btnLeaveLobby").addEventListener("click", function () {
+      Multiplayer.leaveRoom().then(function () {
+        _mpRoomCode = null;
+        _mpIsHost = false;
+        Audio.stopBgm(false);
+        UI.showScreen("screen-menu");
+      });
     });
 
-    g("gameInput").addEventListener("input", (e) => Game.handleInput(e));
-
-    document.querySelector(".typing-zone")?.addEventListener("click", () => {
-      if (!isMobile()) g("gameInput")?.focus();
+    g("gameInput").addEventListener("input", function (e) {
+      Game.handleInput(e);
     });
 
-    document.querySelectorAll(".skill-btn").forEach((btn) => {
-      const act = (e) => {
+    var tz = document.querySelector(".typing-zone");
+    if (tz)
+      tz.addEventListener("click", function () {
+        if (!isMobile()) {
+          var inp = g("gameInput");
+          if (inp) inp.focus();
+        }
+      });
+
+    document.querySelectorAll(".skill-btn").forEach(function (btn) {
+      function act(e) {
         e.preventDefault();
-        const sk = btn.dataset.skill;
+        var sk = btn.dataset.skill;
         if (sk) Game.activateSkill(sk);
-      };
+      }
       btn.addEventListener("click", act);
       btn.addEventListener("touchend", act, { passive: false });
     });
 
-    document.addEventListener("keydown", (e) => {
+    document.addEventListener("keydown", function (e) {
       if (e.key === "1") Game.activateSkill("overdrive");
       if (e.key === "2") Game.activateSkill("freeze");
       if (e.key === "3") Game.activateSkill("burn");
     });
 
-    document.addEventListener("keypress", () => {
-      const active = document.querySelector(".screen.active")?.id;
-      if (active === "screen-game" && !isMobile()) {
-        const inp = g("gameInput");
+    document.addEventListener("keypress", function () {
+      var active = document.querySelector(".screen.active");
+      if (active && active.id === "screen-game" && !isMobile()) {
+        var inp = g("gameInput");
         if (inp && document.activeElement !== inp) inp.focus();
       }
     });
 
-    g("btnPlayAgain").addEventListener("click", () => {
-      const st = Game.getState();
-      if (st.mode === "multiplayer") startMpGame();
-      else startSolo();
+    g("btnPlayAgain").addEventListener("click", function () {
+      var st = Game.getState();
+      if (st.mode === "multiplayer") {
+        if (_mpIsHost && _mpRoomCode) {
+          Effects.showToast("Memulai rematch...", "info");
+          Multiplayer.startRematch().then(function () {
+            startMpGame();
+          });
+        } else {
+          Effects.showToast("Menunggu host untuk rematch...", "info");
+          startMpGame();
+        }
+      } else {
+        startSolo();
+      }
     });
 
-    g("btnBackToMenu").addEventListener("click", () => {
-      stopGameBgm();
-      UI.updateMenuDisplay(getProfile());
-      UI.showScreen("screen-menu");
+    g("btnBackToMenu").addEventListener("click", function () {
+      Audio.stopBgm(true);
+      if (Game.getState().mode === "multiplayer") {
+        Multiplayer.leaveRoom().then(function () {
+          _mpRoomCode = null;
+          _mpIsHost = false;
+          UI.updateMenuDisplay(getProfile());
+          UI.showScreen("screen-menu");
+        });
+      } else {
+        UI.updateMenuDisplay(getProfile());
+        UI.showScreen("screen-menu");
+      }
     });
   }
 
   function initParticles() {
-    const c = document.createElement("div");
+    var c = document.createElement("div");
     c.id = "particles";
     c.style.cssText =
       "position:fixed;top:0;left:0;right:0;bottom:0;z-index:2;pointer-events:none;overflow:hidden;";
     document.body.insertBefore(c, document.body.firstChild);
-    for (let i = 0; i < 28; i++) {
-      const p = document.createElement("div");
-      const sz = Math.random() > 0.7 ? 3 : 2;
-      p.style.cssText = `position:absolute;width:${sz}px;height:${sz}px;left:${Math.random() * 100}%;background:${Math.random() > 0.5 ? "#00f5ff" : "#bf00ff"};opacity:${0.2 + Math.random() * 0.4};border-radius:0;animation:ptclUp ${9 + Math.random() * 16}s linear ${Math.random() * 10}s infinite;`;
+    for (var i = 0; i < 28; i++) {
+      var p = document.createElement("div");
+      var sz = Math.random() > 0.7 ? 3 : 2;
+      var col = Math.random() > 0.5 ? "#00f5ff" : "#bf00ff";
+      p.style.cssText =
+        "position:absolute;width:" +
+        sz +
+        "px;height:" +
+        sz +
+        "px;left:" +
+        Math.random() * 100 +
+        "%;background:" +
+        col +
+        ";opacity:" +
+        (0.2 + Math.random() * 0.4) +
+        ";border-radius:0;animation:ptclUp " +
+        (9 + Math.random() * 16) +
+        "s linear " +
+        Math.random() * 10 +
+        "s infinite;";
       c.appendChild(p);
     }
-    const style = document.createElement("style");
+    var style = document.createElement("style");
     style.textContent =
       "@keyframes ptclUp{0%{transform:translateY(110vh) rotate(0deg);opacity:0;}5%{opacity:.8;}95%{opacity:.6;}100%{transform:translateY(-10vh) rotate(720deg);opacity:0;}}";
     document.head.appendChild(style);
@@ -383,24 +466,23 @@ const App = (() => {
     bootSequence();
     bindEvents();
     UI.showScreen("screen-boot");
-    const unlock = () => {
+
+    function unlock() {
       try {
         new (window.AudioContext || window.webkitAudioContext)().resume();
-      } catch (_) {}
-    };
+      } catch (x) {}
+      Audio.unlock();
+    }
     document.addEventListener("click", unlock, { once: true });
     document.addEventListener("touchstart", unlock, { once: true });
+    document.addEventListener("keydown", unlock, { once: true });
   }
 
-  return { init, getProfile, saveProfile, stopGameBgm };
+  return {
+    init: init,
+    getProfile: getProfile,
+    saveProfile: saveProfile,
+  };
 })();
-
-function isMobile() {
-  return (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent,
-    ) || window.innerWidth < 640
-  );
-}
 
 document.addEventListener("DOMContentLoaded", App.init);
