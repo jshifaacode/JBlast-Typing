@@ -500,4 +500,3 @@ var App = (function () {
 })();
 
 document.addEventListener("DOMContentLoaded", App.init);
-
