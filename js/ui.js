@@ -298,7 +298,6 @@ function buildMobileKeyboard() {
     })
     .join("");
 
-  
   container.querySelectorAll(".key-btn").forEach(function (btn) {
     function handle(e) {
       Audio.tryPlayPending();
