@@ -1,19 +1,44 @@
-const UI = (() => {
+var UI = (function () {
   function showScreen(id) {
-    document.querySelectorAll(".screen").forEach((s) => {
+    document.querySelectorAll(".screen").forEach(function (s) {
       s.classList.remove("active");
       s.style.display = "";
     });
-    const t = document.getElementById(id);
+    var t = document.getElementById(id);
     if (t) {
       t.style.display = "flex";
-      setTimeout(() => t.classList.add("active"), 10);
+      setTimeout(function () {
+        t.classList.add("active");
+      }, 10);
     }
   }
-  
+
+  function _makeSel(container, cls) {
+    container.querySelectorAll("." + cls).forEach(function (opt) {
+      function sel() {
+        container.querySelectorAll("." + cls).forEach(function (o) {
+          o.classList.remove("selected");
+        });
+        opt.classList.add("selected");
+        Audio.keyPress();
+      }
+      opt.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        sel();
+      });
+      opt.addEventListener(
+        "touchstart",
+        function (e) {
+          e.preventDefault();
+          sel();
+        },
+        { passive: false },
+      );
+    });
+  }
 
   function buildAvatarGrid() {
-    const avs = [
+    var avs = [
       "⚡",
       "💀",
       "🔥",
@@ -27,89 +52,79 @@ const UI = (() => {
       "🌀",
       "⚔️",
     ];
-    const grid = document.getElementById("avatarGrid");
+    var grid = document.getElementById("avatarGrid");
     if (!grid) return;
     grid.innerHTML = avs
-      .map(
-        (a, i) =>
-          `<div class="avatar-item${i === 0 ? " selected" : ""}" data-avatar="${a}">${a}</div>`,
-      )
+      .map(function (a, i) {
+        return (
+          '<div class="avatar-item' +
+          (i === 0 ? " selected" : "") +
+          '" data-avatar="' +
+          a +
+          '">' +
+          a +
+          "</div>"
+        );
+      })
       .join("");
-    grid.querySelectorAll(".avatar-item").forEach((opt) => {
-      const sel = () => {
-        grid
-          .querySelectorAll(".avatar-item")
-          .forEach((o) => o.classList.remove("selected"));
-        opt.classList.add("selected");
-        Audio.keyPress();
-      };
-      opt.addEventListener("click", sel);
-      opt.addEventListener("touchend", (e) => {
-        e.preventDefault();
-        sel();
-      });
-    });
+    _makeSel(grid, "avatar-item");
   }
 
   function buildSkinOptions() {
-    const skins = [
+    var skins = [
       { id: "default", label: "◈ DEFAULT" },
       { id: "fire", label: "🔥 FIRE" },
       { id: "lightning", label: "⚡ LIGHTNING" },
       { id: "glitch", label: "💀 GLITCH" },
       { id: "ice", label: "❄️ ICE" },
     ];
-    const el = document.getElementById("skinOptions");
+    var el = document.getElementById("skinOptions");
     if (!el) return;
     el.innerHTML = skins
-      .map(
-        (s, i) =>
-          `<div class="skin-option${i === 0 ? " selected" : ""}" data-skin="${s.id}">${s.label}</div>`,
-      )
-      .join("");
-    el.querySelectorAll(".skin-option").forEach((opt) => {
-      const sel = () => {
-        el.querySelectorAll(".skin-option").forEach((o) =>
-          o.classList.remove("selected"),
+      .map(function (s, i) {
+        return (
+          '<div class="skin-opt' +
+          (i === 0 ? " selected" : "") +
+          '" data-skin="' +
+          s.id +
+          '">' +
+          s.label +
+          "</div>"
         );
-        opt.classList.add("selected");
-        Audio.keyPress();
-      };
-      opt.addEventListener("click", sel);
-      opt.addEventListener("touchend", (e) => {
-        e.preventDefault();
-        sel();
-      });
-    });
+      })
+      .join("");
+    _makeSel(el, "skin-opt");
   }
 
   function updateMenuDisplay(p) {
-    const g = (n) => document.getElementById(n);
+    function g(n) {
+      return document.getElementById(n);
+    }
     if (g("menuUsername")) g("menuUsername").textContent = p.name || "PILOT";
     if (g("menuAvatar")) g("menuAvatar").textContent = p.avatar || "⚡";
-    const xp = p.xp || 0,
-      lvl = Math.floor(Math.sqrt(xp / 50)) + 1;
+    var xp = p.xp || 0;
+    var lvl = Math.floor(Math.sqrt(xp / 50)) + 1;
     if (g("menuLevel")) g("menuLevel").textContent = "LVL " + lvl;
-    const curBase = (lvl - 1) ** 2 * 50,
-      nextBase = lvl ** 2 * 50;
-    const pct = Math.min(
-      100,
-      Math.round(((xp - curBase) / (nextBase - curBase)) * 100),
-    );
+    var curBase = Math.pow(lvl - 1, 2) * 50;
+    var nextBase = Math.pow(lvl, 2) * 50;
+    var range = nextBase - curBase;
+    var pct =
+      range > 0
+        ? Math.min(100, Math.round(((xp - curBase) / range) * 100))
+        : 100;
     if (g("xpFill")) g("xpFill").style.width = pct + "%";
     if (g("xpText"))
-      g("xpText").textContent =
-        xp - curBase + " / " + (nextBase - curBase) + " XP";
-    const stats = p.stats || {};
+      g("xpText").textContent = xp - curBase + " / " + range + " XP";
+    var stats = p.stats || {};
     if (g("statWpm")) g("statWpm").textContent = stats.bestWpm || 0;
     if (g("statAcc")) g("statAcc").textContent = (stats.avgAcc || 0) + "%";
     if (g("statWins")) g("statWins").textContent = stats.wins || 0;
   }
 
   function buildStats(stats) {
-    const grid = document.getElementById("statsGrid");
+    var grid = document.getElementById("statsGrid");
     if (!grid) return;
-    const items = [
+    var items = [
       { v: stats.gamesPlayed || 0, l: "GAMES PLAYED" },
       { v: stats.bestWpm || 0, l: "BEST WPM" },
       { v: (stats.avgAcc || 0) + "%", l: "AVG ACC" },
@@ -118,31 +133,39 @@ const UI = (() => {
       { v: stats.totalScore || 0, l: "TOTAL SCORE" },
     ];
     grid.innerHTML = items
-      .map(
-        (i) =>
-          `<div class="stat-card"><span class="sv bb">${i.v}</span><span class="sl">${i.l}</span></div>`,
-      )
+      .map(function (i) {
+        return (
+          '<div class="stat-card"><span class="sv bb">' +
+          i.v +
+          '</span><span class="sl">' +
+          i.l +
+          "</span></div>"
+        );
+      })
       .join("");
   }
 
-  function showResult({
-    victory,
-    wpm,
-    accuracy,
-    maxCombo,
-    score,
-    mpWinner,
-    mpPlayers,
-  }) {
-    let rank = "F";
-    if (wpm >= 80 && accuracy >= 95) rank = "S";
-    else if (wpm >= 55 && accuracy >= 88) rank = "A";
-    else if (wpm >= 35 && accuracy >= 78) rank = "B";
-    else if (wpm >= 20 && accuracy >= 65) rank = "C";
-    else if (wpm >= 10 || accuracy >= 50) rank = "D";
+  function showResult(opts) {
+    var victory = opts.victory;
+    var wpm = opts.wpm;
+    var accuracy = opts.accuracy;
+    var maxCombo = opts.maxCombo;
+    var score = opts.score;
+    var mpWinner = opts.mpWinner;
+    var mpPlayers = opts.mpPlayers;
 
-    const xpEarned = wpm * 2 + maxCombo * 5 + (victory ? 100 : 20);
-    const p = App.getProfile();
+    var rank = "F";
+    if (accuracy >= 90 && wpm >= 45) rank = "S";
+    else if (accuracy >= 82 && wpm >= 28) rank = "A";
+    else if (accuracy >= 70 && wpm >= 15) rank = "B";
+    else if (accuracy >= 55 && wpm >= 8) rank = "C";
+    else if (accuracy >= 35 || wpm >= 4) rank = "D";
+
+    if (victory && rank === "F") rank = "D";
+    if (victory && rank === "D") rank = "C";
+
+    var xpEarned = wpm * 3 + maxCombo * 5 + (victory ? 150 : 30);
+    var p = App.getProfile();
     p.xp = (p.xp || 0) + xpEarned;
     if (!p.stats) p.stats = {};
     p.stats.gamesPlayed = (p.stats.gamesPlayed || 0) + 1;
@@ -156,17 +179,21 @@ const UI = (() => {
     p.stats.totalScore = (p.stats.totalScore || 0) + score;
     App.saveProfile(p);
 
-    const g = (n) => document.getElementById(n);
-    let titleText = victory ? "MISSION COMPLETE" : "MISSION FAILED";
+    function g(n) {
+      return document.getElementById(n);
+    }
+
+    var titleText = victory ? "MISSION COMPLETE" : "MISSION FAILED";
     if (mpWinner) titleText = victory ? "🏆 KAU MENANG!" : "💀 KAU KALAH";
+
     if (g("resultTitle")) {
       g("resultTitle").textContent = titleText;
       g("resultTitle").className =
-        "result-banner " + (victory ? "win" : "lose");
+        "res-banner " + (victory ? "win" : "lose") + " bb";
     }
     if (g("resultRank")) {
       g("resultRank").textContent = rank;
-      g("resultRank").className = "result-rank rank-" + rank;
+      g("resultRank").className = "res-rank rank-" + rank + " bb";
     }
     if (g("rWpm")) g("rWpm").textContent = wpm;
     if (g("rAcc")) g("rAcc").textContent = accuracy + "%";
@@ -174,41 +201,58 @@ const UI = (() => {
     if (g("rScore")) g("rScore").textContent = score;
     if (g("rXp")) g("rXp").textContent = "+" + xpEarned + " XP";
 
-    const mpEl = g("mpResultInfo");
+    var mpEl = g("mpResultInfo");
     if (mpEl) {
       if (mpWinner && mpPlayers && mpPlayers.length > 0) {
-        const myId = Multiplayer.getPlayerId();
-        const sorted = [...mpPlayers].sort((a, b) => (b.hp || 0) - (a.hp || 0));
-        const medals = ["🥇", "🥈", "🥉"];
-        const rankColors = [
-          "win-rank-1",
-          "win-rank-2",
-          "win-rank-3",
-          "win-rank-other",
-        ];
-
-        const rows = sorted
-          .map((pl, idx) => {
-            const isMe = pl.id === myId;
-            const isWinner = pl.id === mpWinner;
-            const hp = Math.max(0, Math.floor(pl.hp || 0));
-            const hpClass =
-              hp > 60 ? "high" : hp > 30 ? "mid" : hp > 0 ? "low" : "dead";
-            const medal = medals[idx] || idx + 1 + ".";
-            const rankCls = rankColors[Math.min(idx, 3)];
-            const wpmInfo = pl.wpm ? `${pl.wpm} WPM` : "";
-            return `<div class="win-ranking-row${isMe ? " win-rank-me" : ""}">
-            <div class="win-rank-num ${rankCls}">${medal}</div>
-            <div class="win-rank-info">
-              <div class="win-rank-name">${pl.avatar || "⚡"} ${pl.name}${isMe ? " (YOU)" : ""}${isWinner ? " 👑" : ""}</div>
-              <div class="win-rank-wpm">${wpmInfo}</div>
-            </div>
-            <div class="win-rank-hp ${hpClass}">${hp} HP</div>
-          </div>`;
+        var myId = Multiplayer.getPlayerId();
+        var sorted = mpPlayers.slice().sort(function (a, b) {
+          return (b.hp || 0) - (a.hp || 0);
+        });
+        var medals = ["🥇", "🥈", "🥉"];
+        var posCls = ["p1", "p2", "p3", "px"];
+        var rows = sorted
+          .map(function (pl, idx) {
+            var isMe = pl.id === myId;
+            var isWinner = pl.id === mpWinner;
+            var hp = Math.max(0, Math.floor(pl.hp || 0));
+            var hpCls = hp > 100 ? "hi" : hp > 60 ? "md" : hp > 0 ? "lo" : "dd";
+            var medal = medals[idx] || idx + 1 + ".";
+            var pCls = posCls[Math.min(idx, 3)];
+            var wpmStr = pl.wpm ? pl.wpm + " WPM" : "";
+            return (
+              '<div class="rank-row' +
+              (isMe ? " me" : "") +
+              '">' +
+              '<div class="rank-pos ' +
+              pCls +
+              '">' +
+              medal +
+              "</div>" +
+              '<div class="rank-info">' +
+              '<div class="rank-name">' +
+              (pl.avatar || "⚡") +
+              " " +
+              pl.name +
+              (isMe ? " (YOU)" : "") +
+              (isWinner ? " 👑" : "") +
+              "</div>" +
+              '<div class="rank-wpm">' +
+              wpmStr +
+              "</div>" +
+              "</div>" +
+              '<div class="rank-hp ' +
+              hpCls +
+              '">' +
+              hp +
+              " HP</div>" +
+              "</div>"
+            );
           })
           .join("");
-
-        mpEl.innerHTML = `<div class="win-ranking-box"><div class="win-ranking-title bb">BATTLE RANKING</div>${rows}</div>`;
+        mpEl.innerHTML =
+          '<div class="rank-box"><div class="rank-box-ttl bb">BATTLE RANKING</div>' +
+          rows +
+          "</div>";
       } else {
         mpEl.innerHTML = "";
       }
@@ -218,43 +262,63 @@ const UI = (() => {
   }
 
   return {
-    showScreen,
-    buildAvatarGrid,
-    buildSkinOptions,
-    updateMenuDisplay,
-    buildStats,
-    showResult,
+    showScreen: showScreen,
+    buildAvatarGrid: buildAvatarGrid,
+    buildSkinOptions: buildSkinOptions,
+    updateMenuDisplay: updateMenuDisplay,
+    buildStats: buildStats,
+    showResult: showResult,
   };
 })();
 
 function buildMobileKeyboard() {
-  const container = document.getElementById("mobileKeyboard");
+  var container = document.getElementById("mobileKeyboard");
   if (!container) return;
   container.style.display = "flex";
-  const layout = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+  var layout = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
   container.innerHTML = layout
-    .map(
-      (row, ri) =>
-        `<div class="kb-row">${ri === 2 ? '<button class="key-btn key-back bb" data-key="BACK">←</button>' : ""}${row
-          .split("")
-          .map(
-            (c) => `<button class="key-btn bb" data-key="${c}">${c}</button>`,
-          )
-          .join(
-            "",
-          )}${ri === 2 ? '<button class="key-btn key-space bb" data-key=" ">SPC</button>' : ""}</div>`,
-    )
+    .map(function (row, ri) {
+      var back =
+        ri === 2
+          ? '<button class="key-btn key-back bb" data-key="BACK">←</button>'
+          : "";
+      var space =
+        ri === 2
+          ? '<button class="key-btn key-space bb" data-key=" ">SPC</button>'
+          : "";
+      var keys = row
+        .split("")
+        .map(function (c) {
+          return (
+            '<button class="key-btn bb" data-key="' + c + '">' + c + "</button>"
+          );
+        })
+        .join("");
+      return '<div class="kb-row">' + back + keys + space + "</div>";
+    })
     .join("");
-  container.querySelectorAll(".key-btn").forEach((btn) => {
-    const handle = (e) => {
+
+  container.querySelectorAll(".key-btn").forEach(function (btn) {
+    function handle(e) {
+      Audio.tryPlayPending();
       e.preventDefault();
-      const key = btn.dataset.key;
+      var key = btn.dataset.key;
       btn.classList.add("pressed");
-      setTimeout(() => btn.classList.remove("pressed"), 120);
+      setTimeout(function () {
+        btn.classList.remove("pressed");
+      }, 100);
       Game.handleVirtualKey(key);
       Audio.keyPress();
-    };
+    }
     btn.addEventListener("touchstart", handle, { passive: false });
     btn.addEventListener("mousedown", handle);
   });
+}
+
+function isMobile() {
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    ) || window.innerWidth < 640
+  );
 }
