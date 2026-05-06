@@ -7,6 +7,8 @@
       content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"
     />
     <meta name="theme-color" content="#02030d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>JBlast Typing</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -127,6 +129,9 @@
             <span class="row-arr">▶</span>
           </div>
         </div>
+        <div class="audio-bar">
+          <button class="btn-ghost bb" id="btnToggleBgm">♪ BGM: ON</button>
+        </div>
       </div>
 
       <div id="screen-multiplayer" class="screen">
@@ -187,7 +192,7 @@
           <div class="hud-bars" id="hpBars"></div>
           <div class="hud-chips">
             <div class="chip ct">
-              <span class="cv bb" id="gameTimer">05:00</span
+              <span class="cv bb" id="gameTimer">00:00</span
               ><span class="cl">TIME</span>
             </div>
             <div class="chip cw">
@@ -235,7 +240,7 @@
           <div class="target-word" id="targetWord"></div>
           <div class="typing-inds" id="typingIndicators"></div>
         </div>
-        <div class="input-zone">
+        <div class="input-zone" id="inputZone">
           <div class="input-inner">
             <span class="inp-caret bb">▶</span>
             <input
@@ -246,6 +251,7 @@
               autocapitalize="off"
               spellcheck="false"
               placeholder="ketik di sini..."
+              inputmode="text"
             />
             <div class="live-row">
               <span class="live-s bb" id="liveWpm">0 WPM</span>
@@ -315,4 +321,3 @@
     <script src="js/main.js"></script>
   </body>
 </html>
-
