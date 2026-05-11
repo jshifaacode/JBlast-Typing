@@ -127,7 +127,9 @@ var UI = (function () {
     var stats = p.stats || {};
     if (g("statWpm")) g("statWpm").textContent = stats.bestWpm || 0;
     if (g("statAcc")) g("statAcc").textContent = (stats.avgAcc || 0) + "%";
-    if (g("statWins")) g("statWins").textContent = stats.wins || 0;
+    if (g("statWins"))
+      g("statWins").textContent =
+        (stats.soloWins || 0) + "S / " + (stats.mpWins || 0) + "M";
     var bgmBtn = g("btnToggleBgm");
     if (bgmBtn)
       bgmBtn.textContent = "♪ BGM: " + (GameAudio.isMuted() ? "OFF" : "ON");
@@ -140,7 +142,8 @@ var UI = (function () {
       { v: stats.gamesPlayed || 0, l: "GAMES PLAYED" },
       { v: stats.bestWpm || 0, l: "BEST WPM" },
       { v: (stats.avgAcc || 0) + "%", l: "AVG ACC" },
-      { v: stats.wins || 0, l: "WINS" },
+      { v: stats.soloWins || 0, l: "SOLO WINS" },
+      { v: stats.mpWins || 0, l: "MP WINS" },
       { v: stats.bestCombo || 0, l: "BEST COMBO" },
       { v: stats.totalScore || 0, l: "TOTAL SCORE" },
     ];
@@ -181,7 +184,13 @@ var UI = (function () {
     p.xp = (p.xp || 0) + xpEarned;
     if (!p.stats) p.stats = {};
     p.stats.gamesPlayed = (p.stats.gamesPlayed || 0) + 1;
-    if (victory) p.stats.wins = (p.stats.wins || 0) + 1;
+    if (victory) {
+      if (isMultiplayer) {
+        p.stats.mpWins = (p.stats.mpWins || 0) + 1;
+      } else {
+        p.stats.soloWins = (p.stats.soloWins || 0) + 1;
+      }
+    }
     if (wpm >= (p.stats.bestWpm || 0)) p.stats.bestWpm = wpm;
     p.stats.avgAcc = Math.round(
       ((p.stats.avgAcc || 0) * (p.stats.gamesPlayed - 1) + accuracy) /

@@ -4,6 +4,7 @@ var App = (function () {
   var _mpRoomCode = null;
   var _mpIsHost = false;
   var _inMpGame = false;
+  var _lastGameMode = "solo";
 
   function getProfile() {
     if (!profile) {
@@ -110,6 +111,7 @@ var App = (function () {
   function startSolo() {
     var p = getProfile();
     _inMpGame = false;
+    _lastGameMode = "solo";
     UI.showScreen("screen-game");
     _setupGameScreen();
     var sb = document.getElementById("mpSidebar");
@@ -120,6 +122,7 @@ var App = (function () {
   function startMpGame(firstWord) {
     if (_inMpGame) return;
     _inMpGame = true;
+    _lastGameMode = "multiplayer";
     var p = getProfile();
     UI.showScreen("screen-game");
     _setupGameScreen();
@@ -197,6 +200,22 @@ var App = (function () {
       el.style.display = "none";
       el.textContent = "";
     }
+  }
+
+  function _registerMpListeners() {
+    Multiplayer.on("game_start", function (data) {
+      GameAudio.playBgm();
+      startMpGame(data.word);
+    });
+    Multiplayer.on("rematch_start", function (data) {
+      GameAudio.playBgm();
+      _updateRematchStatus(0, 0);
+      _inMpGame = false;
+      startMpGame(data.word);
+    });
+    Multiplayer.on("rematch_votes_update", function (data) {
+      _updateRematchStatus(data.votes, data.total);
+    });
   }
 
   function bindEvents() {
@@ -357,18 +376,7 @@ var App = (function () {
         buildLobby(r.players, true, r.roomCode);
         UI.showScreen("screen-lobby");
         Effects.showToast("Room dibuat! Share kode ke teman.", "success");
-        Multiplayer.on("game_start", function (data) {
-          GameAudio.playBgm();
-          startMpGame(data.word);
-        });
-        Multiplayer.on("rematch_start", function (data) {
-          GameAudio.playBgm();
-          _updateRematchStatus(0, 0);
-          startMpGame(data.word);
-        });
-        Multiplayer.on("rematch_votes_update", function (data) {
-          _updateRematchStatus(data.votes, data.total);
-        });
+        _registerMpListeners();
         Multiplayer.on("players_update", function (data) {
           buildLobby(data.players, true, r.roomCode);
         });
@@ -408,18 +416,7 @@ var App = (function () {
           "Joined " + r.roomCode + "! Tunggu host start.",
           "success",
         );
-        Multiplayer.on("game_start", function (data) {
-          GameAudio.playBgm();
-          startMpGame(data.word);
-        });
-        Multiplayer.on("rematch_start", function (data) {
-          GameAudio.playBgm();
-          _updateRematchStatus(0, 0);
-          startMpGame(data.word);
-        });
-        Multiplayer.on("rematch_votes_update", function (data) {
-          _updateRematchStatus(data.votes, data.total);
-        });
+        _registerMpListeners();
         Multiplayer.on("players_update", function (data) {
           buildLobby(data.players, false, r.roomCode);
         });
@@ -512,12 +509,11 @@ var App = (function () {
     });
 
     addTap("btnPlayAgain", function () {
-      var st = Game.getState();
-      if (st.mode === "multiplayer") {
+      if (_lastGameMode === "multiplayer") {
         var rsEl = document.getElementById("rematchStatus");
         if (rsEl) {
           rsEl.style.display = "block";
-          rsEl.textContent = "Voting rematch...";
+          rsEl.textContent = "Mengirim vote rematch...";
         }
         var btnPlay = document.getElementById("btnPlayAgain");
         if (btnPlay) {
@@ -526,13 +522,12 @@ var App = (function () {
         }
         Multiplayer.voteRematch().then(function () {
           var allPlayers = Multiplayer.getPlayers();
-          if (allPlayers.length < Multiplayer.getMinPlayers()) {
-            if (_mpIsHost) {
-              Multiplayer.startRematch().then(function () {
-                GameAudio.playBgm();
-                startMpGame();
-              });
-            }
+          if (_mpIsHost && allPlayers.length < Multiplayer.getMinPlayers()) {
+            _inMpGame = false;
+            Multiplayer.startRematch().then(function () {
+              GameAudio.playBgm();
+              startMpGame();
+            });
           }
         });
       } else {
@@ -550,10 +545,12 @@ var App = (function () {
         btnPlay.disabled = false;
         btnPlay.textContent = "MAIN LAGI";
       }
-      if (Game.getState().mode === "multiplayer") {
+      if (_lastGameMode === "multiplayer") {
+        _inMpGame = false;
         Multiplayer.leaveRoom().then(function () {
           _mpRoomCode = null;
           _mpIsHost = false;
+          _lastGameMode = "solo";
           UI.updateMenuDisplay(getProfile());
           UI.showScreen("screen-menu");
         });
