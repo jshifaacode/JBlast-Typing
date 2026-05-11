@@ -787,18 +787,22 @@ var Game = (function () {
   function endMpByTime() {
     if (!state.running) return;
     var myId = Multiplayer.getPlayerId();
-    var allPlayers = Multiplayer.getPlayers();
-    var myPlayer = allPlayers.find(function (p) {
-      return p.id === myId;
-    });
-    if (myPlayer) myPlayer.hp = state.playerHp;
-    var sorted = allPlayers.slice().sort(function (a, b) {
-      return (b.hp || 0) - (a.hp || 0);
-    });
-    var winner = sorted[0];
-    var iWon = winner && winner.id === myId;
+    Multiplayer.updatePlayerHp(myId, state.playerHp);
     Effects.showToast("⏰ WAKTU HABIS!", "warning");
-    endMp(iWon, winner ? winner.id : null);
+    setTimeout(function () {
+      Multiplayer.fetchFinalPlayers().then(function (allPlayers) {
+        var myPlayer = allPlayers.find(function (p) {
+          return p.id === myId;
+        });
+        if (myPlayer) myPlayer.hp = state.playerHp;
+        var sorted = allPlayers.slice().sort(function (a, b) {
+          return (b.hp || 0) - (a.hp || 0);
+        });
+        var winner = sorted[0];
+        var iWon = winner && winner.id === myId;
+        endMp(iWon, winner ? winner.id : null);
+      });
+    }, 600);
   }
 
   function calcWpm() {
@@ -946,9 +950,10 @@ var Game = (function () {
         if (incoming < state.playerHp) {
           state.playerHp = incoming;
           renderHpBars();
+          Effects.damageFlash();
+          GameAudio.playerHit();
           if (state.playerHp <= 0) {
             endMp(false);
-            return;
           }
         }
         return;
@@ -970,8 +975,9 @@ var Game = (function () {
       var myId = Multiplayer.getPlayerId();
       if (data.to !== myId) return;
       if (!state.running) return;
-      state.playerHp = Math.max(0, state.playerHp - data.amount);
-      Multiplayer.updatePlayerHp(myId, state.playerHp);
+      var newHp = Math.max(0, state.playerHp - data.amount);
+      state.playerHp = newHp;
+      Multiplayer.updatePlayerHp(myId, newHp);
       renderHpBars();
       Effects.damageFlash();
       GameAudio.playerHit();
@@ -1023,41 +1029,46 @@ var Game = (function () {
     state._bots.forEach(clearInterval);
     Multiplayer.stopBots();
     GameAudio.stopBgm(true);
-    var wpm = calcWpm(),
-      acc = calcAcc();
-    var allPlayers = Multiplayer.getPlayers();
+
     var myId = Multiplayer.getPlayerId();
-    var myPlayer = allPlayers.find(function (p) {
-      return p.id === myId;
-    });
-    if (myPlayer) myPlayer.hp = state.playerHp;
-    var winnerId = forcedWinnerId || null;
-    if (!winnerId) {
-      if (iWon) {
-        winnerId = myId;
-      } else {
-        var alive = allPlayers.filter(function (p) {
-          return p.id !== myId && (p.hp || 0) > 0;
-        });
-        if (alive.length > 0)
-          winnerId = alive.reduce(function (a, b) {
-            return (a.hp || 0) > (b.hp || 0) ? a : b;
-          }).id;
-      }
-    }
+    Multiplayer.updatePlayerHp(myId, state.playerHp);
+
     if (iWon) GameAudio.victory();
     else GameAudio.defeat();
+
     setTimeout(function () {
-      UI.showResult({
-        victory: iWon,
-        wpm: wpm,
-        accuracy: acc,
-        maxCombo: state.maxCombo,
-        score: state.score,
-        mpWinner: winnerId,
-        mpPlayers: allPlayers,
+      Multiplayer.fetchFinalPlayers().then(function (allPlayers) {
+        var myPlayer = allPlayers.find(function (p) {
+          return p.id === myId;
+        });
+        if (myPlayer) myPlayer.hp = state.playerHp;
+
+        var winnerId = forcedWinnerId || null;
+        if (!winnerId) {
+          if (iWon) {
+            winnerId = myId;
+          } else {
+            var sorted = allPlayers.slice().sort(function (a, b) {
+              return (b.hp || 0) - (a.hp || 0);
+            });
+            winnerId = sorted[0] ? sorted[0].id : myId;
+          }
+        }
+
+        var wpm = calcWpm();
+        var acc = calcAcc();
+
+        UI.showResult({
+          victory: iWon,
+          wpm: wpm,
+          accuracy: acc,
+          maxCombo: state.maxCombo,
+          score: state.score,
+          mpWinner: winnerId,
+          mpPlayers: allPlayers,
+        });
       });
-    }, 800);
+    }, 1000);
   }
 
   function endGame(victory) {

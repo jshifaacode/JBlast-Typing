@@ -519,6 +519,20 @@ var Multiplayer = (function () {
     return Promise.resolve();
   }
 
+  function fetchFinalPlayers() {
+    if (!room) return Promise.resolve(Object.values(players));
+    return dbGet("rooms/" + room + "/players")
+      .then(function (data) {
+        if (data && typeof data === "object") {
+          players = data;
+        }
+        return Object.values(players);
+      })
+      .catch(function () {
+        return Object.values(players);
+      });
+  }
+
   function startBotSimulation(word) {
     _bots.forEach(clearInterval);
     _bots = [];
@@ -595,6 +609,7 @@ var Multiplayer = (function () {
     sendTyping,
     sendDamage,
     updatePlayerHp,
+    fetchFinalPlayers,
     leaveRoom,
     getPlayers,
     getPlayer,
