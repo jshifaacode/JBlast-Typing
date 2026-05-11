@@ -3,6 +3,7 @@ var App = (function () {
   var KEY = "keystorm_v2";
   var _mpRoomCode = null;
   var _mpIsHost = false;
+  var _inMpGame = false;
 
   function getProfile() {
     if (!profile) {
@@ -108,6 +109,7 @@ var App = (function () {
 
   function startSolo() {
     var p = getProfile();
+    _inMpGame = false;
     UI.showScreen("screen-game");
     _setupGameScreen();
     var sb = document.getElementById("mpSidebar");
@@ -116,18 +118,16 @@ var App = (function () {
   }
 
   function startMpGame(firstWord) {
-    var st = Game.getState();
-    if (
-      document.getElementById("screen-game") &&
-      document.getElementById("screen-game").classList.contains("active") &&
-      st.running
-    )
-      return;
+    if (_inMpGame) return;
+    _inMpGame = true;
     var p = getProfile();
     UI.showScreen("screen-game");
     _setupGameScreen();
     Game.init("multiplayer", p.skin, firstWord);
     Game.setupMultiplayer();
+    setTimeout(function () {
+      _inMpGame = false;
+    }, 2000);
   }
 
   function buildLobby(players, isHost, roomCode) {
@@ -180,6 +180,22 @@ var App = (function () {
       setTimeout(function () {
         modal.style.display = "none";
       }, 300);
+    }
+  }
+
+  function _updateRematchStatus(votes, total) {
+    var el = document.getElementById("rematchStatus");
+    if (!el) return;
+    if (votes > 0 && votes < total) {
+      el.style.display = "block";
+      el.textContent =
+        "Voting rematch: " + votes + "/" + total + " pemain siap...";
+    } else if (votes >= total && total >= 2) {
+      el.style.display = "block";
+      el.textContent = "Semua siap! Memulai rematch...";
+    } else {
+      el.style.display = "none";
+      el.textContent = "";
     }
   }
 
@@ -347,7 +363,11 @@ var App = (function () {
         });
         Multiplayer.on("rematch_start", function (data) {
           GameAudio.playBgm();
+          _updateRematchStatus(0, 0);
           startMpGame(data.word);
+        });
+        Multiplayer.on("rematch_votes_update", function (data) {
+          _updateRematchStatus(data.votes, data.total);
         });
         Multiplayer.on("players_update", function (data) {
           buildLobby(data.players, true, r.roomCode);
@@ -394,7 +414,11 @@ var App = (function () {
         });
         Multiplayer.on("rematch_start", function (data) {
           GameAudio.playBgm();
+          _updateRematchStatus(0, 0);
           startMpGame(data.word);
+        });
+        Multiplayer.on("rematch_votes_update", function (data) {
+          _updateRematchStatus(data.votes, data.total);
         });
         Multiplayer.on("players_update", function (data) {
           buildLobby(data.players, false, r.roomCode);
@@ -490,19 +514,27 @@ var App = (function () {
     addTap("btnPlayAgain", function () {
       var st = Game.getState();
       if (st.mode === "multiplayer") {
-        Effects.showToast("Voting rematch...", "info");
-        Multiplayer.voteRematch().then(function () {
-          Effects.showToast("Menunggu semua pemain...", "info");
-        });
-        if (
-          _mpIsHost &&
-          Multiplayer.getPlayers().length < Multiplayer.getMinPlayers()
-        ) {
-          Multiplayer.startRematch().then(function () {
-            GameAudio.playBgm();
-            startMpGame();
-          });
+        var rsEl = document.getElementById("rematchStatus");
+        if (rsEl) {
+          rsEl.style.display = "block";
+          rsEl.textContent = "Voting rematch...";
         }
+        var btnPlay = document.getElementById("btnPlayAgain");
+        if (btnPlay) {
+          btnPlay.disabled = true;
+          btnPlay.textContent = "MENUNGGU...";
+        }
+        Multiplayer.voteRematch().then(function () {
+          var allPlayers = Multiplayer.getPlayers();
+          if (allPlayers.length < Multiplayer.getMinPlayers()) {
+            if (_mpIsHost) {
+              Multiplayer.startRematch().then(function () {
+                GameAudio.playBgm();
+                startMpGame();
+              });
+            }
+          }
+        });
       } else {
         GameAudio.playBgm();
         startSolo();
@@ -511,6 +543,13 @@ var App = (function () {
 
     addTap("btnBackToMenu", function () {
       GameAudio.stopBgm(true);
+      var rsEl = document.getElementById("rematchStatus");
+      if (rsEl) rsEl.style.display = "none";
+      var btnPlay = document.getElementById("btnPlayAgain");
+      if (btnPlay) {
+        btnPlay.disabled = false;
+        btnPlay.textContent = "MAIN LAGI";
+      }
       if (Game.getState().mode === "multiplayer") {
         Multiplayer.leaveRoom().then(function () {
           _mpRoomCode = null;

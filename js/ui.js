@@ -11,6 +11,15 @@ var UI = (function () {
         t.classList.add("active");
       }, 10);
     }
+    if (id === "screen-result") {
+      var rsEl = document.getElementById("rematchStatus");
+      if (rsEl) rsEl.style.display = "none";
+      var btnPlay = document.getElementById("btnPlayAgain");
+      if (btnPlay) {
+        btnPlay.disabled = false;
+        btnPlay.textContent = "MAIN LAGI";
+      }
+    }
   }
 
   function _makeSel(container, cls) {
@@ -154,8 +163,9 @@ var UI = (function () {
     var accuracy = opts.accuracy;
     var maxCombo = opts.maxCombo;
     var score = opts.score;
-    var mpWinner = opts.mpWinner;
-    var mpPlayers = opts.mpPlayers;
+    var mpWinner = opts.mpWinner || null;
+    var mpPlayers = opts.mpPlayers || null;
+    var isMultiplayer = !!(mpWinner || (mpPlayers && mpPlayers.length > 0));
 
     var rank = "F";
     if (accuracy >= 90 && wpm >= 45) rank = "S";
@@ -184,8 +194,14 @@ var UI = (function () {
     function g(n) {
       return document.getElementById(n);
     }
-    var titleText = victory ? "MISSION COMPLETE" : "MISSION FAILED";
-    if (mpWinner) titleText = victory ? "🏆 KAU MENANG!" : "💀 KAU KALAH";
+
+    var titleText;
+    if (isMultiplayer) {
+      titleText = victory ? "🏆 KAU MENANG!" : "💀 KAU KALAH";
+    } else {
+      titleText = victory ? "MISSION COMPLETE" : "MISSION FAILED";
+    }
+
     if (g("resultTitle")) {
       g("resultTitle").textContent = titleText;
       g("resultTitle").className =
@@ -203,7 +219,7 @@ var UI = (function () {
 
     var mpEl = g("mpResultInfo");
     if (mpEl) {
-      if (mpWinner && mpPlayers && mpPlayers.length > 0) {
+      if (isMultiplayer && mpPlayers && mpPlayers.length > 0) {
         var myId = Multiplayer.getPlayerId();
         var sorted = mpPlayers.slice().sort(function (a, b) {
           return (b.hp || 0) - (a.hp || 0);
