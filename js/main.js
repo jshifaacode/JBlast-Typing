@@ -5,6 +5,7 @@ var App = (function () {
   var _mpIsHost = false;
   var _inMpGame = false;
   var _lastGameMode = "solo";
+  var _mpListenersRegistered = false;
 
   function getProfile() {
     if (!profile) {
@@ -203,6 +204,8 @@ var App = (function () {
   }
 
   function _registerMpListeners() {
+    if (_mpListenersRegistered) return;
+    _mpListenersRegistered = true;
     Multiplayer.on("game_start", function (data) {
       GameAudio.playBgm();
       startMpGame(data.word);
@@ -215,6 +218,13 @@ var App = (function () {
     });
     Multiplayer.on("rematch_votes_update", function (data) {
       _updateRematchStatus(data.votes, data.total);
+    });
+    Multiplayer.on("players_update", function (data) {
+      if (_mpIsHost) {
+        buildLobby(data.players, true, _mpRoomCode);
+      } else {
+        buildLobby(data.players, false, _mpRoomCode);
+      }
     });
   }
 
@@ -354,6 +364,7 @@ var App = (function () {
       var p = getProfile();
       p.id = p.id || Multiplayer.generatePlayerId();
       saveProfile(p);
+      _mpListenersRegistered = false;
       var btnCreate = document.getElementById("btnCreateRoom");
       btnCreate.disabled = true;
       btnCreate.textContent = "CREATING...";
@@ -377,9 +388,6 @@ var App = (function () {
         UI.showScreen("screen-lobby");
         Effects.showToast("Room dibuat! Share kode ke teman.", "success");
         _registerMpListeners();
-        Multiplayer.on("players_update", function (data) {
-          buildLobby(data.players, true, r.roomCode);
-        });
       });
     });
 
@@ -394,6 +402,7 @@ var App = (function () {
       var p = getProfile();
       p.id = p.id || Multiplayer.generatePlayerId();
       saveProfile(p);
+      _mpListenersRegistered = false;
       var btnJoin = document.getElementById("btnJoinRoom");
       btnJoin.disabled = true;
       btnJoin.textContent = "JOINING...";
@@ -417,9 +426,6 @@ var App = (function () {
           "success",
         );
         _registerMpListeners();
-        Multiplayer.on("players_update", function (data) {
-          buildLobby(data.players, false, r.roomCode);
-        });
       });
     });
 
@@ -453,13 +459,24 @@ var App = (function () {
         );
         return;
       }
-      GameAudio.playBgm();
-      Multiplayer.startGame().then(function () {
-        startMpGame();
+      var btn = document.getElementById("btnStartMatch");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "STARTING...";
+      }
+      Multiplayer.startGame().then(function (word) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "START MATCH";
+        }
+        if (!word) return;
+        GameAudio.playBgm();
+        startMpGame(word);
       });
     });
 
     addTap("btnLeaveLobby", function () {
+      _mpListenersRegistered = false;
       Multiplayer.leaveRoom().then(function () {
         _mpRoomCode = null;
         _mpIsHost = false;
@@ -524,9 +541,10 @@ var App = (function () {
           var allPlayers = Multiplayer.getPlayers();
           if (_mpIsHost && allPlayers.length < Multiplayer.getMinPlayers()) {
             _inMpGame = false;
-            Multiplayer.startRematch().then(function () {
+            Multiplayer.startRematch().then(function (word) {
+              if (!word) return;
               GameAudio.playBgm();
-              startMpGame();
+              startMpGame(word);
             });
           }
         });
@@ -547,6 +565,7 @@ var App = (function () {
       }
       if (_lastGameMode === "multiplayer") {
         _inMpGame = false;
+        _mpListenersRegistered = false;
         Multiplayer.leaveRoom().then(function () {
           _mpRoomCode = null;
           _mpIsHost = false;
