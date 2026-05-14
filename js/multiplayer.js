@@ -142,10 +142,24 @@ var Multiplayer = (function () {
           _updateLobby();
         }
 
-        var status = r.status || "lobby";
+        var rematchId = r.rematchId || "";
+        if (rematchId && rematchId !== _lastRematchWord) {
+          _lastRematchWord = rematchId;
+          var rWord = r.currentWord || "";
+          if (rWord) {
+            _lastStatus = "rematch-" + rematchId;
+            emit("rematch_start", {
+              word: rWord,
+              players: Object.values(players),
+            });
+            return;
+          }
+        }
 
-        if (status === "playing" && _lastStatus !== "playing") {
-          _lastStatus = "playing";
+        var status = r.status || "lobby";
+        var startId = r.startId || "";
+        if (status === "playing" && startId && _lastStatus !== startId) {
+          _lastStatus = startId;
           var word = r.currentWord || "";
           if (word) {
             emit("game_start", {
@@ -155,23 +169,8 @@ var Multiplayer = (function () {
           }
         }
 
-        var rematchWord = r.rematchWord || "";
-        if (
-          rematchWord !== "" &&
-          rematchWord !== _lastRematchWord &&
-          status === "playing"
-        ) {
-          _lastRematchWord = rematchWord;
-          emit("rematch_start", {
-            word: rematchWord,
-            players: Object.values(players),
-          });
-        }
-
-        if (status !== "playing") {
-          var totalPlayers = Object.keys(players).length;
-          _checkRematchVotes(r.rematchVotes, totalPlayers);
-        }
+        var totalPlayers = Object.keys(players).length;
+        _checkRematchVotes(r.rematchVotes, totalPlayers);
       });
     }, 800);
   }
@@ -326,21 +325,32 @@ var Multiplayer = (function () {
       }
     });
     listen("rooms/" + code + "/status", function (data) {
-      if (data === "playing" && _lastStatus !== "playing") {
-        _lastStatus = "playing";
-        dbGet("rooms/" + code + "/currentWord").then(function (w) {
-          if (w) {
-            emit("game_start", { word: w, players: Object.values(players) });
+      if (data === "playing") {
+        dbGet("rooms/" + code).then(function (r) {
+          if (!r) return;
+          var rematchId = r.rematchId || "";
+          if (rematchId && rematchId !== _lastRematchWord) {
+            _lastRematchWord = rematchId;
+            _lastStatus = "rematch-" + rematchId;
+            if (r.currentWord) {
+              emit("rematch_start", { word: r.currentWord, players: Object.values(players) });
+            }
+            return;
+          }
+          var startId = r.startId || "";
+          if (startId && _lastStatus !== startId && r.currentWord) {
+            _lastStatus = startId;
+            emit("game_start", { word: r.currentWord, players: Object.values(players) });
           }
         });
       }
     });
-    listen("rooms/" + code + "/rematchWord", function (data) {
-      if (data && data !== "" && data !== _lastRematchWord) {
+    listen("rooms/" + code + "/rematchId", function (data) {
+      if (data && data !== _lastRematchWord) {
         _lastRematchWord = data;
-        emit("rematch_start", {
-          word: data,
-          players: Object.values(players),
+        _lastStatus = "rematch-" + data;
+        dbGet("rooms/" + code + "/currentWord").then(function (w) {
+          if (w) emit("rematch_start", { word: w, players: Object.values(players) });
         });
       }
     });
@@ -407,14 +417,17 @@ var Multiplayer = (function () {
     _rematchStarted = false;
     _lastRematchWord = "";
     var word = Words.getByWave(1);
+    var startId = Date.now().toString(36);
+    _lastStatus = startId;
     return dbUpd("rooms/" + room, {
       status: "playing",
       currentWord: word,
       rematchWord: "",
+      rematchId: "",
       rematchVotes: null,
+      startId: startId,
       startedAt: Date.now(),
     }).then(function () {
-      _lastStatus = "playing";
       return word;
     });
   }
@@ -427,6 +440,7 @@ var Multiplayer = (function () {
   function startRematch() {
     if (!isHost || !room) return Promise.resolve(null);
     var word = Words.getByWave(1);
+    var rematchId = Date.now().toString(36) + "_r";
     Object.values(players).forEach(function (p) {
       p.hp = PLAYER_MAX_HP;
       p.wpm = 0;
@@ -436,6 +450,7 @@ var Multiplayer = (function () {
       status: "playing",
       currentWord: word,
       rematchWord: word,
+      rematchId: rematchId,
       rematchVotes: null,
       startedAt: Date.now(),
     };
@@ -444,9 +459,9 @@ var Multiplayer = (function () {
       updates["players/" + p.id + "/wpm"] = 0;
       updates["players/" + p.id + "/progress"] = 0;
     });
+    _lastRematchWord = rematchId;
+    _lastStatus = "rematch-" + rematchId;
     return dbUpd("rooms/" + room, updates).then(function () {
-      _lastStatus = "playing";
-      _lastRematchWord = word;
       emit("rematch_start", { word: word, players: Object.values(players) });
       return word;
     });
@@ -521,16 +536,14 @@ var Multiplayer = (function () {
 
   function fetchFinalPlayers() {
     if (!room) return Promise.resolve(Object.values(players));
-    return dbGet("rooms/" + room + "/players")
-      .then(function (data) {
-        if (data && typeof data === "object") {
-          players = data;
-        }
-        return Object.values(players);
-      })
-      .catch(function () {
-        return Object.values(players);
-      });
+    return dbGet("rooms/" + room + "/players").then(function (data) {
+      if (data && typeof data === "object") {
+        players = data;
+      }
+      return Object.values(players);
+    }).catch(function () {
+      return Object.values(players);
+    });
   }
 
   function startBotSimulation(word) {

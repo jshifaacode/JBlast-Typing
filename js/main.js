@@ -206,25 +206,33 @@ var App = (function () {
   function _registerMpListeners() {
     if (_mpListenersRegistered) return;
     _mpListenersRegistered = true;
+
     Multiplayer.on("game_start", function (data) {
+      if (_inMpGame) return;
       GameAudio.playBgm();
       startMpGame(data.word);
     });
+
     Multiplayer.on("rematch_start", function (data) {
-      GameAudio.playBgm();
-      _updateRematchStatus(0, 0);
       _inMpGame = false;
+      _updateRematchStatus(0, 0);
+      var btnPlay = document.getElementById("btnPlayAgain");
+      if (btnPlay) {
+        btnPlay.disabled = false;
+        btnPlay.textContent = "MAIN LAGI";
+      }
+      var rsEl = document.getElementById("rematchStatus");
+      if (rsEl) rsEl.style.display = "none";
+      GameAudio.playBgm();
       startMpGame(data.word);
     });
+
     Multiplayer.on("rematch_votes_update", function (data) {
       _updateRematchStatus(data.votes, data.total);
     });
+
     Multiplayer.on("players_update", function (data) {
-      if (_mpIsHost) {
-        buildLobby(data.players, true, _mpRoomCode);
-      } else {
-        buildLobby(data.players, false, _mpRoomCode);
-      }
+      buildLobby(data.players, _mpIsHost, _mpRoomCode);
     });
   }
 
@@ -537,17 +545,7 @@ var App = (function () {
           btnPlay.disabled = true;
           btnPlay.textContent = "MENUNGGU...";
         }
-        Multiplayer.voteRematch().then(function () {
-          var allPlayers = Multiplayer.getPlayers();
-          if (_mpIsHost && allPlayers.length < Multiplayer.getMinPlayers()) {
-            _inMpGame = false;
-            Multiplayer.startRematch().then(function (word) {
-              if (!word) return;
-              GameAudio.playBgm();
-              startMpGame(word);
-            });
-          }
-        });
+        Multiplayer.voteRematch();
       } else {
         GameAudio.playBgm();
         startSolo();
