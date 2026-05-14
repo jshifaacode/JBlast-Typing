@@ -640,9 +640,19 @@ var Game = (function () {
       if (opponents.length > 0) {
         var oppDmg = Math.floor((18 + comboDmg) * mult);
         opponents.forEach(function (opp) {
+          var newHp = Math.max(0, (opp.hp || 0) - oppDmg);
+          opp.hp = newHp;
+          Multiplayer.updatePlayerHp(opp.id, newHp);
           Multiplayer.sendDamage(opp.id, oppDmg);
         });
         Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
+        setTimeout(function () {
+          _checkWinCondition();
+        }, 300);
+      } else {
+        setTimeout(function () {
+          _checkWinCondition();
+        }, 300);
       }
     }
     if (
@@ -861,7 +871,9 @@ var Game = (function () {
     var aliveOpponents = opponents.filter(function (p) {
       return (p.hp || 0) > 0;
     });
-    if (aliveOpponents.length === 0) endMp(true);
+    if (aliveOpponents.length === 0) {
+      endMp(true);
+    }
   }
 
   function endMpByTime() {
@@ -1001,7 +1013,7 @@ var Game = (function () {
     state.winCheckInterval = setInterval(function () {
       if (!state.running) return;
       _checkWinCondition();
-    }, 2500);
+    }, 1000);
 
     Multiplayer.on("player_progress", function () {
       updateMpSidebar();
@@ -1050,18 +1062,14 @@ var Game = (function () {
       updateMpSidebar();
       renderHpBars();
 
+      _checkWinCondition();
+    });
+
+    Multiplayer.on("players_update", function () {
       if (!state.running) return;
-
-      var opponents = allPlayers.filter(function (p) {
-        return p.id !== myId;
-      });
-      var aliveOpponents = opponents.filter(function (p) {
-        return (p.hp || 0) > 0;
-      });
-
-      if (opponents.length > 0 && aliveOpponents.length === 0) {
-        endMp(true);
-      }
+      updateMpSidebar();
+      renderHpBars();
+      _checkWinCondition();
     });
 
     Multiplayer.on("damage_dealt", function (data) {
