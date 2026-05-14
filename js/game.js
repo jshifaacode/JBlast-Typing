@@ -40,7 +40,7 @@ var Game = (function () {
     {
       id: "bot",
       name: "ROGUE BOT",
-      avatar: "fa-solid fa-robot",
+      avatarHtml: '<i class="fa-solid fa-robot"></i>',
       maxHp: 80,
       attackDmg: 5,
       attackDelay: 12000,
@@ -48,7 +48,7 @@ var Game = (function () {
     {
       id: "virus",
       name: "VIRUS.EXE",
-      avatar: "fa-solid fa-biohazard",
+      avatarHtml: '<i class="fa-solid fa-bug"></i>',
       maxHp: 100,
       attackDmg: 7,
       attackDelay: 11000,
@@ -56,7 +56,7 @@ var Game = (function () {
     {
       id: "boss",
       name: "SYSTEM BOSS",
-      avatar: "fa-solid fa-skull",
+      avatarHtml: '<i class="fa-solid fa-skull-crossbones"></i>',
       maxHp: 180,
       attackDmg: 10,
       attackDelay: 9000,
@@ -65,7 +65,7 @@ var Game = (function () {
     {
       id: "glitch",
       name: "GLITCH_GHOST",
-      avatar: "fa-solid fa-ghost",
+      avatarHtml: '<i class="fa-solid fa-ghost"></i>',
       maxHp: 90,
       attackDmg: 6,
       attackDelay: 11000,
@@ -73,7 +73,7 @@ var Game = (function () {
     {
       id: "phantom",
       name: "PHANTOM.SYS",
-      avatar: "fa-solid fa-spider",
+      avatarHtml: '<i class="fa-solid fa-spider"></i>',
       maxHp: 120,
       attackDmg: 8,
       attackDelay: 10000,
@@ -178,7 +178,7 @@ var Game = (function () {
       var e = {
         id: tmpl.id,
         name: tmpl.name,
-        avatar: tmpl.avatar,
+        avatarHtml: tmpl.avatarHtml,
         isBoss: tmpl.isBoss || false,
         maxHp: Math.floor(tmpl.maxHp * scale),
         hp: Math.floor(tmpl.maxHp * scale),
@@ -205,16 +205,16 @@ var Game = (function () {
     state._bots = [];
     state._botCompleted = false;
     var botNames = [
-      { n: "CYPHER_X", a: "fa-solid fa-robot" },
-      { n: "VOID_RUNNER", a: "fa-solid fa-microchip" },
-      { n: "GHOST_42", a: "fa-solid fa-skull" },
+      { n: "CYPHER_X", avatarHtml: '<i class="fa-solid fa-robot"></i>' },
+      { n: "VOID_RUNNER", avatarHtml: '<i class="fa-solid fa-ghost"></i>' },
+      { n: "GHOST_42", avatarHtml: '<i class="fa-solid fa-skull"></i>' },
     ];
     var count = Math.min(state.wave, 2);
     var bots = botNames.slice(0, count).map(function (b, i) {
       return {
         id: "bot_" + i,
         name: b.n,
-        avatar: b.a,
+        avatarHtml: b.avatarHtml,
         speed: 0.38 + state.wave * 0.12 + Math.random() * 0.25,
       };
     });
@@ -253,7 +253,7 @@ var Game = (function () {
     Effects.damageFlash();
     GameAudio.playerHit();
     Effects.showToast(
-      bot.name + " SELESAI DULUAN! -" + dmg + " HP",
+      bot.name + " selesai duluan! -" + dmg + " HP",
       "error",
       2000,
     );
@@ -267,9 +267,9 @@ var Game = (function () {
     card.className = "enemy-card" + (e.isBoss ? " enemy-boss" : "");
     card.id = "enemy-" + e.id;
     card.innerHTML =
-      '<div class="enemy-avatar"><i class="' +
-      e.avatar +
-      '"></i></div>' +
+      '<div class="enemy-avatar">' +
+      e.avatarHtml +
+      "</div>" +
       '<div class="enemy-name bb">' +
       e.name +
       "</div>" +
@@ -404,7 +404,6 @@ var Game = (function () {
     }
     var expected = state.currentWord[state.typedIndex];
     state.totalChars++;
-
     if (lastChar === expected) {
       state.correctChars++;
       state.typedIndex++;
@@ -475,7 +474,6 @@ var Game = (function () {
     var k = key === " " ? " " : key.toLowerCase();
     var expected = state.currentWord[state.typedIndex];
     state.totalChars++;
-
     if (k === expected) {
       state.correctChars++;
       state.typedIndex++;
@@ -532,9 +530,7 @@ var Game = (function () {
     Effects.comboEffect(state.combo);
     GameAudio.comboUp(state.combo);
     updateCombo();
-
     if (state.wordCount % 3 === 0) unlockSkill();
-
     var mult = state.skills.overdrive.active ? 2 : 1;
     var comboDmg = Math.min(state.combo, 12) * 2;
     var baseDmg = 20 + comboDmg;
@@ -546,7 +542,6 @@ var Game = (function () {
       dmgEnemy(target, Math.floor(baseDmg * mult));
     }
     state.score += (12 + comboDmg) * mult;
-
     var healAmt = 6 + Math.min(state.combo - 1, 6) * 2;
     var prevHp = state.playerHp;
     state.playerHp = Math.min(state.maxPlayerHp, state.playerHp + healAmt);
@@ -555,7 +550,6 @@ var Game = (function () {
       if (state.multiplayer)
         Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
     }
-
     if (state.multiplayer) {
       var myId = Multiplayer.getPlayerId();
       var opponents = Multiplayer.getPlayers().filter(function (p) {
@@ -566,14 +560,9 @@ var Game = (function () {
         opponents.forEach(function (opp) {
           Multiplayer.sendDamage(opp.id, oppDmg);
         });
-        Effects.showToast(
-          "DISERANG LAWAN! -" + oppDmg + " HP",
-          "warning",
-          1400,
-        );
+        Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
       }
     }
-
     if (
       state.enemies.every(function (e) {
         return e.hp <= 0;
@@ -676,7 +665,6 @@ var Game = (function () {
     var cap = name.charAt(0).toUpperCase() + name.slice(1);
     var btn = document.getElementById("skill" + cap);
     if (btn && btn.disabled) return;
-
     if (name === "overdrive") {
       skill.active = true;
       document.body.classList.add("overdrive");
@@ -775,7 +763,7 @@ var Game = (function () {
         var rs = (remaining % 60).toString().padStart(2, "0");
         if (el) el.textContent = rm + ":" + rs;
         if (remaining === 30) Effects.showToast("30 DETIK LAGI!", "warning");
-        if (remaining === 10) Effects.showToast("10 DETIK LAGI!", "warning");
+        if (remaining === 10) Effects.showToast("10 DETIK!", "warning");
       }
     }, 1000);
   }
@@ -783,22 +771,18 @@ var Game = (function () {
   function endMpByTime() {
     if (!state.running) return;
     var myId = Multiplayer.getPlayerId();
-    Multiplayer.updatePlayerHp(myId, state.playerHp);
+    var allPlayers = Multiplayer.getPlayers();
+    var myPlayer = allPlayers.find(function (p) {
+      return p.id === myId;
+    });
+    if (myPlayer) myPlayer.hp = state.playerHp;
+    var sorted = allPlayers.slice().sort(function (a, b) {
+      return (b.hp || 0) - (a.hp || 0);
+    });
+    var winner = sorted[0];
+    var iWon = winner && winner.id === myId;
     Effects.showToast("WAKTU HABIS!", "warning");
-    setTimeout(function () {
-      Multiplayer.fetchFinalPlayers().then(function (allPlayers) {
-        var myPlayer = allPlayers.find(function (p) {
-          return p.id === myId;
-        });
-        if (myPlayer) myPlayer.hp = state.playerHp;
-        var sorted = allPlayers.slice().sort(function (a, b) {
-          return (b.hp || 0) - (a.hp || 0);
-        });
-        var winner = sorted[0];
-        var iWon = winner && winner.id === myId;
-        endMp(iWon, winner ? winner.id : null);
-      });
-    }, 600);
+    endMp(iWon, winner ? winner.id : null);
   }
 
   function calcWpm() {
@@ -852,7 +836,7 @@ var Game = (function () {
       state.maxPlayerHp +
       '</span></div><div class="hpbar-track"><div class="hpbar-fill p" style="width:' +
       pPct +
-      "%;" +
+      "%; " +
       pStyle +
       '"></div></div></div>';
 
@@ -869,9 +853,7 @@ var Game = (function () {
             Math.min(100, (oppHp / PLAYER_MAX_HP) * 100),
           );
           html +=
-            '<div class="hpbar"><div class="hpbar-row"><span class="hpbar-name"><i class="' +
-            (p.avatar || "fa-solid fa-bolt") +
-            '"></i> ' +
+            '<div class="hpbar"><div class="hpbar-row"><span class="hpbar-name">' +
             p.name +
             '</span><span class="hpbar-val">' +
             Math.ceil(oppHp) +
@@ -885,9 +867,7 @@ var Game = (function () {
       state.enemies.forEach(function (e) {
         var pct = Math.max(0, (e.hp / e.maxHp) * 100);
         html +=
-          '<div class="hpbar"><div class="hpbar-row"><span class="hpbar-name"><i class="' +
-          e.avatar +
-          '"></i> ' +
+          '<div class="hpbar"><div class="hpbar-row"><span class="hpbar-name">' +
           e.name +
           '</span><span class="hpbar-val">' +
           Math.ceil(e.hp) +
@@ -946,10 +926,9 @@ var Game = (function () {
         if (incoming < state.playerHp) {
           state.playerHp = incoming;
           renderHpBars();
-          Effects.damageFlash();
-          GameAudio.playerHit();
           if (state.playerHp <= 0) {
             endMp(false);
+            return;
           }
         }
         return;
@@ -971,13 +950,16 @@ var Game = (function () {
       var myId = Multiplayer.getPlayerId();
       if (data.to !== myId) return;
       if (!state.running) return;
-      var newHp = Math.max(0, state.playerHp - data.amount);
-      state.playerHp = newHp;
-      Multiplayer.updatePlayerHp(myId, newHp);
+      state.playerHp = Math.max(0, state.playerHp - data.amount);
+      Multiplayer.updatePlayerHp(myId, state.playerHp);
       renderHpBars();
       Effects.damageFlash();
       GameAudio.playerHit();
-      Effects.showToast("DISERANG! -" + data.amount + " HP", "error", 1400);
+      Effects.showToast(
+        "Lawan serang kamu! -" + data.amount + " HP",
+        "error",
+        1400,
+      );
       if (state.playerHp <= 0) endMp(false);
     });
     updateMpSidebar();
@@ -993,16 +975,15 @@ var Game = (function () {
         var hpPct = Math.max(0, Math.min(100, (hp / PLAYER_MAX_HP) * 100));
         var hpColor = hp > 100 ? "var(--g)" : hp > 60 ? "var(--o)" : "var(--r)";
         return (
-          '<div class="mp-prow"><span class="mp-pav"><i class="' +
-          (p.avatar || "fa-solid fa-bolt") +
-          '"></i></span><span class="mp-pname">' +
+          '<div class="mp-prow"><span class="mp-pname">' +
           p.name +
           (p.id === myId ? " (YOU)" : "") +
           '</span><div class="mp-hpw"><div class="mp-hpf" style="width:' +
           hpPct +
           "%;background:" +
           hpColor +
-          '"></div></div><span class="mp-wpm">' +
+          '"></div></div>' +
+          '<span class="mp-wpm">' +
           (p.wpm || 0) +
           " WPM</span></div>"
         );
@@ -1021,46 +1002,41 @@ var Game = (function () {
     state._bots.forEach(clearInterval);
     Multiplayer.stopBots();
     GameAudio.stopBgm(true);
-
+    var wpm = calcWpm(),
+      acc = calcAcc();
+    var allPlayers = Multiplayer.getPlayers();
     var myId = Multiplayer.getPlayerId();
-    Multiplayer.updatePlayerHp(myId, state.playerHp);
-
+    var myPlayer = allPlayers.find(function (p) {
+      return p.id === myId;
+    });
+    if (myPlayer) myPlayer.hp = state.playerHp;
+    var winnerId = forcedWinnerId || null;
+    if (!winnerId) {
+      if (iWon) {
+        winnerId = myId;
+      } else {
+        var alive = allPlayers.filter(function (p) {
+          return p.id !== myId && (p.hp || 0) > 0;
+        });
+        if (alive.length > 0)
+          winnerId = alive.reduce(function (a, b) {
+            return (a.hp || 0) > (b.hp || 0) ? a : b;
+          }).id;
+      }
+    }
     if (iWon) GameAudio.victory();
     else GameAudio.defeat();
-
     setTimeout(function () {
-      Multiplayer.fetchFinalPlayers().then(function (allPlayers) {
-        var myPlayer = allPlayers.find(function (p) {
-          return p.id === myId;
-        });
-        if (myPlayer) myPlayer.hp = state.playerHp;
-
-        var winnerId = forcedWinnerId || null;
-        if (!winnerId) {
-          if (iWon) {
-            winnerId = myId;
-          } else {
-            var sorted = allPlayers.slice().sort(function (a, b) {
-              return (b.hp || 0) - (a.hp || 0);
-            });
-            winnerId = sorted[0] ? sorted[0].id : myId;
-          }
-        }
-
-        var wpm = calcWpm();
-        var acc = calcAcc();
-
-        UI.showResult({
-          victory: iWon,
-          wpm: wpm,
-          accuracy: acc,
-          maxCombo: state.maxCombo,
-          score: state.score,
-          mpWinner: winnerId,
-          mpPlayers: allPlayers,
-        });
+      UI.showResult({
+        victory: iWon,
+        wpm: wpm,
+        accuracy: acc,
+        maxCombo: state.maxCombo,
+        score: state.score,
+        mpWinner: winnerId,
+        mpPlayers: allPlayers,
       });
-    }, 1000);
+    }, 800);
   }
 
   function endGame(victory) {

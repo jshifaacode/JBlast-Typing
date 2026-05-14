@@ -552,20 +552,11 @@ body {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--b2);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
   transition: all 0.15s;
-}
-.av-label {
-  font-family: "Bebas Neue", sans-serif;
-  font-size: 7px;
-  color: var(--t3);
-  letter-spacing: 1px;
-  line-height: 1;
 }
 .avatar-item:hover {
   border-color: rgba(0, 245, 255, 0.4);
@@ -648,8 +639,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  color: var(--c);
+  font-size: 24px;
 }
 .pilot-info {
   flex: 1;
@@ -976,9 +966,8 @@ body {
   border-color: rgba(57, 255, 20, 0.35);
 }
 .lpc-avatar {
-  font-size: 18px;
+  font-size: 22px;
   margin-bottom: 4px;
-  color: var(--c);
 }
 .lpc-name {
   font-family: "Bebas Neue", sans-serif;
@@ -1147,11 +1136,9 @@ body {
   background: rgba(255, 34, 85, 0.06);
 }
 .enemy-avatar {
-  font-size: 22px;
+  font-size: 18px;
   text-align: center;
   margin-bottom: 2px;
-  color: var(--c);
-  line-height: 1;
 }
 .enemy-name {
   font-family: "Bebas Neue", sans-serif;
@@ -1735,9 +1722,6 @@ body {
 .mp-pav {
   font-size: 11px;
   flex-shrink: 0;
-  color: var(--c);
-  width: 14px;
-  text-align: center;
 }
 .mp-pname {
   font-family: "Bebas Neue", sans-serif;
@@ -2197,4 +2181,161 @@ body.overdrive .input-zone {
   .kb-row {
     gap: 2px;
   }
+}
+
+.pilot-av {
+  font-size: 32px;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--b1);
+  border: 1px solid var(--b3);
+  flex-shrink: 0;
+}
+.pilot-av i {
+  color: var(--c);
+  font-size: 28px;
+}
+
+.pilot-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pstat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 40px;
+}
+.pstat .v {
+  font-size: 15px;
+  color: var(--c);
+}
+.pstat .l {
+  font-size: 8px;
+  color: var(--t2);
+  letter-spacing: 1px;
+}
+
+.avatar-item {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--b1);
+  border: 1px solid var(--b3);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 18px;
+}
+.avatar-item i {
+  color: var(--t2);
+  font-size: 18px;
+  transition: color 0.15s;
+}
+.avatar-item.selected {
+  border-color: var(--c);
+  background: var(--c2);
+}
+.avatar-item.selected i {
+  color: var(--c);
+}
+
+.skin-opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--b3);
+  background: var(--b1);
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 2px;
+  transition: all 0.15s;
+}
+.skin-opt i {
+  font-size: 13px;
+}
+.skin-opt.selected {
+  border-color: var(--c);
+  color: var(--c);
+  background: var(--c2);
+}
+
+.lpc-avatar {
+  font-size: 20px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--b1);
+  border: 1px solid var(--b3);
+}
+.lpc-avatar i {
+  color: var(--c);
+  font-size: 16px;
+}
+
+.enemy-avatar {
+  font-size: 28px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.enemy-avatar i {
+  color: var(--r);
+  font-size: 28px;
+}
+.enemy-boss .enemy-avatar i {
+  color: var(--p);
+  font-size: 32px;
+}
+
+.mp-box-ico {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+.mp-box-ico i {
+  color: var(--c);
+  font-size: 28px;
+}
+
+.row-ico {
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.row-ico i {
+  color: var(--c);
+  font-size: 16px;
+}
+
+.mp-sidebar-lbl i {
+  margin-right: 4px;
+}
+
+.rank-name i {
+  font-size: 11px;
+}
+
+.htp-title i {
+  margin-right: 5px;
+  color: var(--c);
+}
+
+.sk-ico i {
+  font-size: 13px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
 }

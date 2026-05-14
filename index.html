@@ -34,7 +34,7 @@
         <div class="modal-body">
           <div class="htp-section">
             <div class="htp-title bb">
-              <i class="fa-solid fa-sword"></i> SOLO MISSION
+              <i class="fa-solid fa-crosshairs"></i> SOLO MISSION
             </div>
             <div class="htp-text">
               Lawan AI bot dalam 6 wave. Ketik kata yang muncul dengan cepat dan
@@ -43,7 +43,7 @@
           </div>
           <div class="htp-section">
             <div class="htp-title bb">
-              <i class="fa-solid fa-users"></i> MULTIPLAYER ARENA
+              <i class="fa-solid fa-bolt"></i> MULTIPLAYER ARENA
             </div>
             <div class="htp-text">
               Battle real-time vs pemain lain. Buat room atau join room teman.
@@ -55,16 +55,16 @@
               <i class="fa-solid fa-heart-pulse"></i> HP &amp; DAMAGE
             </div>
             <div class="htp-text">
-              Ketik kata benar &rarr; serang musuh + heal dirimu<br />
-              Ketik salah &rarr; -2 HP kamu<br />
-              Musuh menyerang otomatis tiap beberapa detik<br />
-              Di multiplayer, kata benar = serang semua lawan<br />
-              HP habis = kalah
+              &bull; Ketik kata benar &rarr; serang musuh + heal dirimu<br />
+              &bull; Ketik salah &rarr; -2 HP kamu<br />
+              &bull; Musuh menyerang otomatis tiap beberapa detik<br />
+              &bull; Di multiplayer, kata benar = serang semua lawan<br />
+              &bull; HP habis = kalah
             </div>
           </div>
           <div class="htp-section">
             <div class="htp-title bb">
-              <i class="fa-solid fa-bolt"></i> COMBO SYSTEM
+              <i class="fa-solid fa-fire-flame-curved"></i> COMBO SYSTEM
             </div>
             <div class="htp-text">
               Ketik kata berturut-turut tanpa salah untuk membangun COMBO. Combo
@@ -76,24 +76,18 @@
               <i class="fa-solid fa-wand-magic-sparkles"></i> SKILLS
             </div>
             <div class="htp-text">
-              <span style="color: var(--y)"
-                ><i class="fa-solid fa-bolt"></i> OVERDRIVE [1]</span
-              >
-              &mdash; Damage x2 selama 6 detik<br />
-              <span style="color: var(--c)"
-                ><i class="fa-solid fa-snowflake"></i> FREEZE [2]</span
-              >
-              &mdash; Bekukan musuh 5 detik<br />
-              <span style="color: var(--r)"
-                ><i class="fa-solid fa-fire"></i> BURN [3]</span
-              >
-              &mdash; Bakar musuh, DoT damage<br />
+              &bull; <span style="color: var(--y)">OVERDRIVE [1]</span> &mdash;
+              Damage x2 selama 6 detik<br />
+              &bull; <span style="color: var(--c)">FREEZE [2]</span> &mdash;
+              Bekukan musuh 5 detik<br />
+              &bull; <span style="color: var(--r)">BURN [3]</span> &mdash; Bakar
+              musuh, DoT damage<br />
               Skill terbuka setiap 3 kata berhasil diketik.
             </div>
           </div>
           <div class="htp-section">
             <div class="htp-title bb">
-              <i class="fa-solid fa-trophy"></i> RANKING
+              <i class="fa-solid fa-ranking-star"></i> RANKING
             </div>
             <div class="htp-text">
               S: WPM &ge;45 &amp; Akurasi &ge;90%<br />
@@ -109,12 +103,12 @@
             </div>
             <div class="htp-text">
               Setelah game selesai, klik MAIN LAGI. Ketika semua pemain klik,
-              rematch otomatis dimulai tanpa perlu balik ke lobby!
+              rematch otomatis dimulai!
             </div>
           </div>
         </div>
         <button class="btn bb" id="btnCloseHowToPlay" style="margin-top: 12px">
-          MENGERTI
+          MENGERTI &#9658;
         </button>
       </div>
     </div>
@@ -155,14 +149,14 @@
           <div class="skin-opts" id="skinOptions"></div>
         </div>
         <button class="btn bb" id="btnConfirmLogin" style="margin-top: 10px">
-          KONFIRMASI
+          KONFIRMASI &#9658;
         </button>
       </div>
 
       <div id="screen-menu" class="screen">
         <div class="pilot-card">
           <div class="pilot-av" id="menuAvatar">
-            <i class="fa-solid fa-bolt"></i>
+            <i class="fa-solid fa-user-astronaut"></i>
           </div>
           <div class="pilot-info">
             <div class="pilot-name bb" id="menuUsername">PILOT</div>
@@ -182,7 +176,11 @@
             </div>
             <div class="pstat">
               <span class="v bb" id="statWins">0</span
-              ><span class="l">WIN</span>
+              ><span class="l">SOLO W</span>
+            </div>
+            <div class="pstat">
+              <span class="v bb" id="statMpWins">0</span
+              ><span class="l">MP W</span>
             </div>
           </div>
         </div>
@@ -204,36 +202,26 @@
             <span class="row-ico"><i class="fa-solid fa-crosshairs"></i></span>
             <div class="row-txt">
               <div class="row-title bb">SOLO MISSION</div>
-              <div class="row-desc">Practice — Lawan AI Bot</div>
+              <div class="row-desc">Practice &mdash; Lawan AI Bot</div>
             </div>
-            <span class="row-arr"
-              ><i class="fa-solid fa-chevron-right"></i
-            ></span>
+            <span class="row-arr">&#9658;</span>
           </div>
           <div class="menu-row mp-row" id="btnMultiplayer">
-            <span class="row-ico"
-              ><i class="fa-solid fa-tower-broadcast"></i
-            ></span>
+            <span class="row-ico"><i class="fa-solid fa-bolt"></i></span>
             <div class="row-txt">
               <div class="row-title bb">JBLAST TYPING ARENA</div>
               <div class="row-desc">Real-time battle vs player lain</div>
             </div>
             <span class="row-badge bb">ONLINE</span>
-            <span class="row-arr"
-              ><i class="fa-solid fa-chevron-right"></i
-            ></span>
+            <span class="row-arr">&#9658;</span>
           </div>
           <div class="menu-row" id="btnStats">
-            <span class="row-ico"
-              ><i class="fa-solid fa-chart-column"></i
-            ></span>
+            <span class="row-ico"><i class="fa-solid fa-chart-bar"></i></span>
             <div class="row-txt">
               <div class="row-title bb">WAR RECORDS</div>
               <div class="row-desc">Lihat statistik pertarunganmu</div>
             </div>
-            <span class="row-arr"
-              ><i class="fa-solid fa-chevron-right"></i
-            ></span>
+            <span class="row-arr">&#9658;</span>
           </div>
           <div class="menu-row" id="btnHowToPlay">
             <span class="row-ico"><i class="fa-solid fa-book-open"></i></span>
@@ -241,9 +229,7 @@
               <div class="row-title bb">CARA BERMAIN</div>
               <div class="row-desc">Panduan lengkap gameplay</div>
             </div>
-            <span class="row-arr"
-              ><i class="fa-solid fa-chevron-right"></i
-            ></span>
+            <span class="row-arr">&#9658;</span>
           </div>
         </div>
         <div class="audio-bar">
@@ -265,7 +251,7 @@
         <div class="mp-grid">
           <div class="mp-box">
             <div class="mp-box-ico">
-              <i class="fa-solid fa-house-signal"></i>
+              <i class="fa-solid fa-tower-broadcast"></i>
             </div>
             <div class="mp-box-title bb">BUAT ROOM</div>
             <div class="mp-box-desc">Host private match kamu</div>
@@ -273,7 +259,7 @@
           </div>
           <div class="mp-box">
             <div class="mp-box-ico">
-              <i class="fa-solid fa-right-to-bracket"></i>
+              <i class="fa-solid fa-satellite-dish"></i>
             </div>
             <div class="mp-box-title bb">JOIN ROOM</div>
             <div class="mp-box-desc">Masukkan kode dari temanmu</div>
@@ -296,20 +282,18 @@
         <div class="room-code-wrap">
           <span class="rc-lbl bb">ROOM CODE</span>
           <span class="rc-code bb" id="lobbyCode">-----</span>
-          <button class="btn sm bb" id="btnCopyCode">
-            <i class="fa-solid fa-copy"></i> COPY
-          </button>
+          <button class="btn sm bb" id="btnCopyCode">COPY KODE</button>
         </div>
         <div class="lobby-status-txt bb" id="lobbyStatus">
           Menunggu pemain...
         </div>
         <div class="lobby-players" id="lobbyPlayers"></div>
         <div class="lobby-hint mono" id="lobbyHint">
-          Min. 2 pemain — Maks. 4 pemain
+          Min. 2 pemain &mdash; Maks. 4 pemain
         </div>
         <div class="lobby-actions">
           <button class="btn bb" id="btnStartMatch" style="display: none">
-            <i class="fa-solid fa-play"></i> START MATCH
+            &#9658; START MATCH
           </button>
           <button class="btn-ghost bb" id="btnLeaveLobby">TINGGALKAN</button>
         </div>
@@ -338,8 +322,8 @@
             data-skill="overdrive"
             disabled
           >
-            <span class="sk-ico"><i class="fa-solid fa-bolt"></i></span>
-            <span class="sk-nm bb">OVERDRIVE</span
+            <span class="sk-ico"><i class="fa-solid fa-bolt"></i></span
+            ><span class="sk-nm bb">OVERDRIVE</span
             ><span class="sk-key">[1]</span>
             <div class="skill-cd-bar" id="cdOverdrive"></div>
           </button>
@@ -349,8 +333,8 @@
             data-skill="freeze"
             disabled
           >
-            <span class="sk-ico"><i class="fa-solid fa-snowflake"></i></span>
-            <span class="sk-nm bb">FREEZE</span><span class="sk-key">[2]</span>
+            <span class="sk-ico"><i class="fa-solid fa-snowflake"></i></span
+            ><span class="sk-nm bb">FREEZE</span><span class="sk-key">[2]</span>
             <div class="skill-cd-bar" id="cdFreeze"></div>
           </button>
           <button
@@ -359,8 +343,8 @@
             data-skill="burn"
             disabled
           >
-            <span class="sk-ico"><i class="fa-solid fa-fire"></i></span>
-            <span class="sk-nm bb">BURN</span><span class="sk-key">[3]</span>
+            <span class="sk-ico"><i class="fa-solid fa-fire"></i></span
+            ><span class="sk-nm bb">BURN</span><span class="sk-key">[3]</span>
             <div class="skill-cd-bar" id="cdBurn"></div>
           </button>
         </div>
@@ -371,9 +355,7 @@
         </div>
         <div class="input-zone" id="inputZone">
           <div class="input-inner">
-            <span class="inp-caret bb"
-              ><i class="fa-solid fa-caret-right"></i
-            ></span>
+            <span class="inp-caret bb">&#9658;</span>
             <input
               type="text"
               id="gameInput"

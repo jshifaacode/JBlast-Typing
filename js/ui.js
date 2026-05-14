@@ -1,4 +1,27 @@
 var UI = (function () {
+  var AVATARS = [
+    { id: "BOLT", icon: "fa-solid fa-bolt" },
+    { id: "SKULL", icon: "fa-solid fa-skull" },
+    { id: "FIRE", icon: "fa-solid fa-fire" },
+    { id: "ALIEN", icon: "fa-solid fa-user-secret" },
+    { id: "ROBOT", icon: "fa-solid fa-robot" },
+    { id: "SHIELD", icon: "fa-solid fa-shield-halved" },
+    { id: "DNA", icon: "fa-solid fa-dna" },
+    { id: "BURST", icon: "fa-solid fa-burst" },
+    { id: "SATELLITE", icon: "fa-solid fa-satellite" },
+    { id: "GEM", icon: "fa-solid fa-gem" },
+    { id: "TORNADO", icon: "fa-solid fa-tornado" },
+    { id: "SWORD", icon: "fa-solid fa-khanda" },
+  ];
+
+  function _renderAvatar(av) {
+    var found = AVATARS.find(function (a) {
+      return a.id === av;
+    });
+    if (found) return '<i class="' + found.icon + '"></i>';
+    return '<i class="fa-solid fa-user-astronaut"></i>';
+  }
+
   function showScreen(id) {
     document.querySelectorAll(".screen").forEach(function (s) {
       s.classList.remove("active");
@@ -47,45 +70,31 @@ var UI = (function () {
   }
 
   function buildAvatarGrid() {
-    var avs = [
-      { icon: "fa-solid fa-bolt", label: "BOLT" },
-      { icon: "fa-solid fa-skull", label: "SKULL" },
-      { icon: "fa-solid fa-dragon", label: "DRAGON" },
-      { icon: "fa-solid fa-ghost", label: "GHOST" },
-      { icon: "fa-solid fa-robot", label: "ROBOT" },
-      { icon: "fa-solid fa-radiation", label: "HAZARD" },
-      { icon: "fa-solid fa-dna", label: "DNA" },
-      { icon: "fa-solid fa-meteor", label: "METEOR" },
-      { icon: "fa-solid fa-satellite", label: "SAT" },
-      { icon: "fa-solid fa-eye", label: "EYE" },
-      { icon: "fa-solid fa-infinity", label: "INF" },
-      { icon: "fa-solid fa-crosshairs", label: "AIM" },
-    ];
     var grid = document.getElementById("avatarGrid");
     if (!grid) return;
-    grid.innerHTML = avs
-      .map(function (a, i) {
-        return (
-          '<div class="avatar-item' +
-          (i === 0 ? " selected" : "") +
-          '" data-avatar="' +
-          a.icon +
-          '">' +
-          '<i class="' +
-          a.icon +
-          '"></i>' +
-          '<span class="av-label">' +
-          a.label +
-          "</span></div>"
-        );
-      })
-      .join("");
+    grid.innerHTML = AVATARS.map(function (a, i) {
+      return (
+        '<div class="avatar-item' +
+        (i === 0 ? " selected" : "") +
+        '" data-avatar="' +
+        a.id +
+        '">' +
+        '<i class="' +
+        a.icon +
+        '"></i>' +
+        "</div>"
+      );
+    }).join("");
     _makeSel(grid, "avatar-item");
   }
 
   function buildSkinOptions() {
     var skins = [
-      { id: "default", label: "DEFAULT", icon: "fa-solid fa-circle" },
+      {
+        id: "default",
+        label: "DEFAULT",
+        icon: "fa-solid fa-circle-half-stroke",
+      },
       { id: "fire", label: "FIRE", icon: "fa-solid fa-fire" },
       { id: "lightning", label: "LIGHTNING", icon: "fa-solid fa-bolt" },
       { id: "glitch", label: "GLITCH", icon: "fa-solid fa-skull" },
@@ -116,11 +125,9 @@ var UI = (function () {
     function g(n) {
       return document.getElementById(n);
     }
+    var avEl = g("menuAvatar");
+    if (avEl) avEl.innerHTML = _renderAvatar(p.avatar);
     if (g("menuUsername")) g("menuUsername").textContent = p.name || "PILOT";
-    if (g("menuAvatar")) {
-      g("menuAvatar").innerHTML =
-        '<i class="' + (p.avatar || "fa-solid fa-bolt") + '"></i>';
-    }
     var xp = p.xp || 0;
     var lvl = Math.floor(Math.sqrt(xp / 50)) + 1;
     if (g("menuLevel")) g("menuLevel").textContent = "LVL " + lvl;
@@ -137,9 +144,8 @@ var UI = (function () {
     var stats = p.stats || {};
     if (g("statWpm")) g("statWpm").textContent = stats.bestWpm || 0;
     if (g("statAcc")) g("statAcc").textContent = (stats.avgAcc || 0) + "%";
-    if (g("statWins"))
-      g("statWins").textContent =
-        (stats.soloWins || 0) + "S / " + (stats.mpWins || 0) + "M";
+    if (g("statWins")) g("statWins").textContent = stats.wins || 0;
+    if (g("statMpWins")) g("statMpWins").textContent = stats.mpWins || 0;
     var bgmBtn = g("btnToggleBgm");
     if (bgmBtn)
       bgmBtn.innerHTML =
@@ -154,7 +160,7 @@ var UI = (function () {
       { v: stats.gamesPlayed || 0, l: "GAMES PLAYED" },
       { v: stats.bestWpm || 0, l: "BEST WPM" },
       { v: (stats.avgAcc || 0) + "%", l: "AVG ACC" },
-      { v: stats.soloWins || 0, l: "SOLO WINS" },
+      { v: stats.wins || 0, l: "SOLO WINS" },
       { v: stats.mpWins || 0, l: "MP WINS" },
       { v: stats.bestCombo || 0, l: "BEST COMBO" },
       { v: stats.totalScore || 0, l: "TOTAL SCORE" },
@@ -197,8 +203,11 @@ var UI = (function () {
     if (!p.stats) p.stats = {};
     p.stats.gamesPlayed = (p.stats.gamesPlayed || 0) + 1;
     if (victory) {
-      if (isMultiplayer) p.stats.mpWins = (p.stats.mpWins || 0) + 1;
-      else p.stats.soloWins = (p.stats.soloWins || 0) + 1;
+      if (isMultiplayer) {
+        p.stats.mpWins = (p.stats.mpWins || 0) + 1;
+      } else {
+        p.stats.wins = (p.stats.wins || 0) + 1;
+      }
     }
     if (wpm >= (p.stats.bestWpm || 0)) p.stats.bestWpm = wpm;
     p.stats.avgAcc = Math.round(
@@ -213,12 +222,13 @@ var UI = (function () {
       return document.getElementById(n);
     }
 
-    var titleText;
-    if (isMultiplayer) {
-      titleText = victory ? "KAU MENANG" : "KAU KALAH";
-    } else {
-      titleText = victory ? "MISSION COMPLETE" : "MISSION FAILED";
-    }
+    var titleText = isMultiplayer
+      ? victory
+        ? "VICTORY — KAU MENANG!"
+        : "DEFEAT — KAU KALAH"
+      : victory
+        ? "MISSION COMPLETE"
+        : "MISSION FAILED";
 
     if (g("resultTitle")) {
       g("resultTitle").textContent = titleText;
@@ -242,11 +252,7 @@ var UI = (function () {
         var sorted = mpPlayers.slice().sort(function (a, b) {
           return (b.hp || 0) - (a.hp || 0);
         });
-        var medalIcons = [
-          '<i class="fa-solid fa-trophy" style="color:#ffd700"></i>',
-          '<i class="fa-solid fa-medal" style="color:#c0c0c0"></i>',
-          '<i class="fa-solid fa-medal" style="color:#cd7f32"></i>',
-        ];
+        var medals = ["#1", "#2", "#3", "#4"];
         var posCls = ["p1", "p2", "p3", "px"];
         var rows = sorted
           .map(function (pl, idx) {
@@ -254,12 +260,9 @@ var UI = (function () {
             var isWinner = pl.id === mpWinner;
             var hp = Math.max(0, Math.floor(pl.hp || 0));
             var hpCls = hp > 100 ? "hi" : hp > 60 ? "md" : hp > 0 ? "lo" : "dd";
-            var medal = medalIcons[idx] || idx + 1 + ".";
+            var medal = medals[idx] || "#" + (idx + 1);
             var pCls = posCls[Math.min(idx, 3)];
             var wpmStr = pl.wpm ? pl.wpm + " WPM" : "";
-            var crownStr = isWinner
-              ? ' <i class="fa-solid fa-crown" style="color:#ffd700;font-size:11px"></i>'
-              : "";
             return (
               '<div class="rank-row' +
               (isMe ? " me" : "") +
@@ -270,20 +273,25 @@ var UI = (function () {
               medal +
               "</div>" +
               '<div class="rank-info">' +
-              '<div class="rank-name"><i class="' +
-              (pl.avatar || "fa-solid fa-bolt") +
-              '"></i> ' +
+              '<div class="rank-name">' +
+              _renderAvatar(pl.avatar) +
+              " " +
               pl.name +
               (isMe ? " (YOU)" : "") +
-              crownStr +
-              '</div><div class="rank-wpm">' +
+              (isWinner
+                ? ' <i class="fa-solid fa-crown" style="color:var(--y)"></i>'
+                : "") +
+              "</div>" +
+              '<div class="rank-wpm">' +
               wpmStr +
-              "</div></div>" +
+              "</div>" +
+              "</div>" +
               '<div class="rank-hp ' +
               hpCls +
               '">' +
               hp +
-              " HP</div></div>"
+              " HP</div>" +
+              "</div>"
             );
           })
           .join("");
@@ -317,7 +325,7 @@ function buildMobileKeyboard() {
     .map(function (row, ri) {
       var back =
         ri === 2
-          ? '<button class="key-btn key-back bb" data-key="BACK"><i class="fa-solid fa-delete-left"></i></button>'
+          ? '<button class="key-btn key-back bb" data-key="BACK">&#8592;</button>'
           : "";
       var space =
         ri === 2

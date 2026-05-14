@@ -4,8 +4,8 @@ var App = (function () {
   var _mpRoomCode = null;
   var _mpIsHost = false;
   var _inMpGame = false;
-  var _lastGameMode = "solo";
-  var _mpListenersRegistered = false;
+  var _mpReady = false;
+  var _leavingGame = false;
 
   function getProfile() {
     if (!profile) {
@@ -14,7 +14,7 @@ var App = (function () {
         ? JSON.parse(s)
         : {
             name: "",
-            avatar: "fa-solid fa-bolt",
+            avatar: "BOLT",
             skin: "default",
             xp: 0,
             level: 1,
@@ -104,15 +104,15 @@ var App = (function () {
         inp.style.height = "";
       }
       setTimeout(function () {
-        if (inp) inp.focus();
+        if (inp && !_leavingGame) inp.focus();
       }, 200);
     }
   }
 
   function startSolo() {
-    var p = getProfile();
+    _leavingGame = false;
     _inMpGame = false;
-    _lastGameMode = "solo";
+    var p = getProfile();
     UI.showScreen("screen-game");
     _setupGameScreen();
     var sb = document.getElementById("mpSidebar");
@@ -123,15 +123,52 @@ var App = (function () {
   function startMpGame(firstWord) {
     if (_inMpGame) return;
     _inMpGame = true;
-    _lastGameMode = "multiplayer";
+    _leavingGame = false;
     var p = getProfile();
     UI.showScreen("screen-game");
     _setupGameScreen();
     Game.init("multiplayer", p.skin, firstWord);
     Game.setupMultiplayer();
+    GameAudio.playBgm();
     setTimeout(function () {
       _inMpGame = false;
     }, 3000);
+  }
+
+  function _updateRematchStatus(votes, total) {
+    var el = document.getElementById("rematchStatus");
+    if (!el) return;
+    if (total < 2) {
+      el.style.display = "none";
+      el.textContent = "";
+      return;
+    }
+    if (votes > 0 && votes < total) {
+      el.style.display = "block";
+      el.textContent =
+        "Voting rematch: " + votes + "/" + total + " pemain siap...";
+    } else if (votes >= total) {
+      el.style.display = "block";
+      el.textContent = "Semua siap! Memulai rematch...";
+    } else {
+      el.style.display = "none";
+      el.textContent = "";
+    }
+  }
+
+  function _setupMpListeners() {
+    Multiplayer.on("game_start", function (data) {
+      if (_leavingGame) return;
+      startMpGame(data.word);
+    });
+    Multiplayer.on("rematch_start", function (data) {
+      if (_leavingGame) return;
+      _updateRematchStatus(0, 0);
+      startMpGame(data.word);
+    });
+    Multiplayer.on("rematch_votes_update", function (data) {
+      _updateRematchStatus(data.votes, data.total);
+    });
   }
 
   function buildLobby(players, isHost, roomCode) {
@@ -151,13 +188,15 @@ var App = (function () {
       grid.innerHTML = players
         .map(function (p) {
           return (
-            '<div class="lpc ready"><div class="lpc-avatar"><i class="' +
-            (p.avatar || "fa-solid fa-bolt") +
-            '"></i></div>' +
+            '<div class="lpc ready">' +
+            '<div class="lpc-avatar">' +
+            Multiplayer.getRenderAvatar()(p.avatar) +
+            "</div>" +
             '<div class="lpc-name bb">' +
             p.name +
             "</div>" +
-            '<div class="lpc-status" style="color:var(--g)">READY</div></div>'
+            '<div class="lpc-status" style="color:var(--g)">READY</div>' +
+            "</div>"
           );
         })
         .join("");
@@ -189,54 +228,6 @@ var App = (function () {
     }
   }
 
-  function _updateRematchStatus(votes, total) {
-    var el = document.getElementById("rematchStatus");
-    if (!el) return;
-    if (votes > 0 && votes < total) {
-      el.style.display = "block";
-      el.textContent = "VOTE REMATCH: " + votes + "/" + total + " SIAP";
-    } else if (votes >= total && total >= 2) {
-      el.style.display = "block";
-      el.textContent = "SEMUA SIAP! MEMULAI...";
-    } else {
-      el.style.display = "none";
-      el.textContent = "";
-    }
-  }
-
-  function _registerMpListeners() {
-    if (_mpListenersRegistered) return;
-    _mpListenersRegistered = true;
-
-    Multiplayer.on("game_start", function (data) {
-      if (_inMpGame) return;
-      GameAudio.playBgm();
-      startMpGame(data.word);
-    });
-
-    Multiplayer.on("rematch_start", function (data) {
-      _inMpGame = false;
-      _updateRematchStatus(0, 0);
-      var btnPlay = document.getElementById("btnPlayAgain");
-      if (btnPlay) {
-        btnPlay.disabled = false;
-        btnPlay.textContent = "MAIN LAGI";
-      }
-      var rsEl = document.getElementById("rematchStatus");
-      if (rsEl) rsEl.style.display = "none";
-      GameAudio.playBgm();
-      startMpGame(data.word);
-    });
-
-    Multiplayer.on("rematch_votes_update", function (data) {
-      _updateRematchStatus(data.votes, data.total);
-    });
-
-    Multiplayer.on("players_update", function (data) {
-      buildLobby(data.players, _mpIsHost, _mpRoomCode);
-    });
-  }
-
   function bindEvents() {
     addTap("btnEnterGame", function () {
       GameAudio.keyPress();
@@ -258,7 +249,7 @@ var App = (function () {
         return;
       }
       var selAv = document.querySelector(".avatar-item.selected");
-      var avatar = selAv ? selAv.dataset.avatar : "fa-solid fa-bolt";
+      var avatar = selAv ? selAv.dataset.avatar : "BOLT";
       var selSk = document.querySelector(".skin-opt.selected");
       var skin = selSk ? selSk.dataset.skin : "default";
       var p = getProfile();
@@ -293,6 +284,7 @@ var App = (function () {
       GameAudio.keyPress();
       showHowToPlay();
     });
+
     addTap("btnCloseHowToPlay", function () {
       hideHowToPlay();
     });
@@ -374,10 +366,10 @@ var App = (function () {
       var p = getProfile();
       p.id = p.id || Multiplayer.generatePlayerId();
       saveProfile(p);
-      _mpListenersRegistered = false;
       var btnCreate = document.getElementById("btnCreateRoom");
       btnCreate.disabled = true;
       btnCreate.textContent = "CREATING...";
+      _setupMpListeners();
       Multiplayer.createRoom({
         id: p.id,
         name: p.name,
@@ -394,10 +386,13 @@ var App = (function () {
         }
         _mpRoomCode = r.roomCode;
         _mpIsHost = true;
+        _mpReady = true;
         buildLobby(r.players, true, r.roomCode);
         UI.showScreen("screen-lobby");
         Effects.showToast("Room dibuat! Share kode ke teman.", "success");
-        _registerMpListeners();
+        Multiplayer.on("players_update", function (data) {
+          buildLobby(data.players, true, r.roomCode);
+        });
       });
     });
 
@@ -412,10 +407,10 @@ var App = (function () {
       var p = getProfile();
       p.id = p.id || Multiplayer.generatePlayerId();
       saveProfile(p);
-      _mpListenersRegistered = false;
       var btnJoin = document.getElementById("btnJoinRoom");
       btnJoin.disabled = true;
       btnJoin.textContent = "JOINING...";
+      _setupMpListeners();
       Multiplayer.joinRoom(code, {
         id: p.id,
         name: p.name,
@@ -429,13 +424,16 @@ var App = (function () {
         if (!r) return;
         _mpRoomCode = r.roomCode;
         _mpIsHost = false;
+        _mpReady = true;
         buildLobby(r.players, false, r.roomCode);
         UI.showScreen("screen-lobby");
         Effects.showToast(
           "Joined " + r.roomCode + "! Tunggu host start.",
           "success",
         );
-        _registerMpListeners();
+        Multiplayer.on("players_update", function (data) {
+          buildLobby(data.players, false, r.roomCode);
+        });
       });
     });
 
@@ -469,28 +467,19 @@ var App = (function () {
         );
         return;
       }
-      var btn = document.getElementById("btnStartMatch");
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "STARTING...";
-      }
-      Multiplayer.startGame().then(function (word) {
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = "START MATCH";
-        }
-        if (!word) return;
-        GameAudio.playBgm();
-        startMpGame(word);
+      Multiplayer.startGame().then(function () {
+        startMpGame();
       });
     });
 
     addTap("btnLeaveLobby", function () {
-      _mpListenersRegistered = false;
+      _mpReady = false;
+      _leavingGame = true;
       Multiplayer.leaveRoom().then(function () {
         _mpRoomCode = null;
         _mpIsHost = false;
         GameAudio.stopBgm(false);
+        _leavingGame = false;
         UI.showScreen("screen-menu");
       });
     });
@@ -528,6 +517,7 @@ var App = (function () {
     });
 
     document.addEventListener("keypress", function () {
+      if (_leavingGame) return;
       var active = document.querySelector(".screen.active");
       if (active && active.id === "screen-game" && !isMobile()) {
         var inp = document.getElementById("gameInput");
@@ -536,11 +526,12 @@ var App = (function () {
     });
 
     addTap("btnPlayAgain", function () {
-      if (_lastGameMode === "multiplayer") {
+      var st = Game.getState();
+      if (st.mode === "multiplayer" && _mpReady) {
         var rsEl = document.getElementById("rematchStatus");
         if (rsEl) {
           rsEl.style.display = "block";
-          rsEl.textContent = "MENGIRIM VOTE...";
+          rsEl.textContent = "Voting rematch...";
         }
         var btnPlay = document.getElementById("btnPlayAgain");
         if (btnPlay) {
@@ -555,6 +546,9 @@ var App = (function () {
     });
 
     addTap("btnBackToMenu", function () {
+      _leavingGame = true;
+      var inp = document.getElementById("gameInput");
+      if (inp) inp.blur();
       GameAudio.stopBgm(true);
       var rsEl = document.getElementById("rematchStatus");
       if (rsEl) rsEl.style.display = "none";
@@ -563,17 +557,18 @@ var App = (function () {
         btnPlay.disabled = false;
         btnPlay.textContent = "MAIN LAGI";
       }
-      if (_lastGameMode === "multiplayer") {
-        _inMpGame = false;
-        _mpListenersRegistered = false;
+      var st = Game.getState();
+      if (st.mode === "multiplayer" && _mpReady) {
+        _mpReady = false;
         Multiplayer.leaveRoom().then(function () {
           _mpRoomCode = null;
           _mpIsHost = false;
-          _lastGameMode = "solo";
+          _leavingGame = false;
           UI.updateMenuDisplay(getProfile());
           UI.showScreen("screen-menu");
         });
       } else {
+        _leavingGame = false;
         UI.updateMenuDisplay(getProfile());
         UI.showScreen("screen-menu");
       }
