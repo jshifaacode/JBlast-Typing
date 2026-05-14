@@ -33,6 +33,8 @@ var Game = (function () {
     wordCount: 0,
     mpTimeLimit: 0,
     _eliminated: false,
+    _spectateInterval: null,
+    _endingMp: false,
   };
 
   var PLAYER_MAX_HP = 200;
@@ -105,8 +107,11 @@ var Game = (function () {
     state.multiplayer = false;
     state.mpTimeLimit = 0;
     state._eliminated = false;
+    state._endingMp = false;
     clearInterval(state.timerInterval);
     clearInterval(state.winCheckInterval);
+    clearInterval(state._spectateInterval);
+    state._spectateInterval = null;
 
     ["Overdrive", "Freeze", "Burn"].forEach(function (sk) {
       var btn = document.getElementById("skill" + sk);
@@ -325,6 +330,13 @@ var Game = (function () {
     }
   }
 
+  function _getAliveCount() {
+    var allPlayers = Multiplayer.getPlayers();
+    return allPlayers.filter(function (p) {
+      return (p.hp || 0) > 0;
+    }).length;
+  }
+
   function _handleMpDeath() {
     if (state._eliminated) return;
     state._eliminated = true;
@@ -335,20 +347,22 @@ var Game = (function () {
       return p.id !== myId && (p.hp || 0) > 0;
     });
 
-    if (aliveOpponents.length <= 1) {
-      endMp(false);
-      return;
-    }
-
     state.running = false;
+    clearInterval(state.timerInterval);
+    clearInterval(state.winCheckInterval);
     state.enemies.forEach(function (e) {
       clearTimeout(e.attackTimer);
       if (e.burnTick) clearInterval(e.burnTick);
     });
     state._bots.forEach(clearInterval);
 
-    Effects.showToast("KAU GUGUR! Menonton pertandingan...", "error", 3000);
+    if (aliveOpponents.length === 0) {
+      _finishMp(false);
+      return;
+    }
+
     GameAudio.defeat();
+    Effects.showToast("KAU GUGUR! Menonton pertandingan...", "error", 3000);
 
     var inp = document.getElementById("gameInput");
     if (inp) {
@@ -368,39 +382,62 @@ var Game = (function () {
       wordPanel.style.pointerEvents = "none";
     }
 
-    Effects.showToast("Kamu eliminated! Menunggu hasil...", "error", 0);
-
-    var _spectateCheck = setInterval(function () {
+    clearInterval(state._spectateInterval);
+    state._spectateInterval = setInterval(function () {
       var current = Multiplayer.getPlayers();
       var stillAlive = current.filter(function (p) {
         return p.id !== myId && (p.hp || 0) > 0;
       });
       if (stillAlive.length <= 1) {
-        clearInterval(_spectateCheck);
-        var wpm = calcWpm();
-        var acc = calcAcc();
-        var winner = null;
-        if (stillAlive.length === 1) winner = stillAlive[0].id;
-        else {
-          var sorted = current.slice().sort(function (a, b) {
-            return (b.hp || 0) - (a.hp || 0);
-          });
-          if (sorted[0]) winner = sorted[0].id;
-        }
-        setTimeout(function () {
-          GameAudio.stopBgm(true);
-          UI.showResult({
-            victory: false,
-            wpm: wpm,
-            accuracy: acc,
-            maxCombo: state.maxCombo,
-            score: state.score,
-            mpWinner: winner,
-            mpPlayers: current,
-          });
-        }, 1500);
+        clearInterval(state._spectateInterval);
+        state._spectateInterval = null;
+        _finishMp(false);
       }
-    }, 2000);
+    }, 1500);
+  }
+
+  function _finishMp(iWon) {
+    if (state._endingMp) return;
+    state._endingMp = true;
+
+    clearInterval(state._spectateInterval);
+    state._spectateInterval = null;
+
+    var myId = Multiplayer.getPlayerId();
+    var allPlayers = Multiplayer.getPlayers();
+    var myPlayer = allPlayers.find(function (p) {
+      return p.id === myId;
+    });
+    if (myPlayer) myPlayer.hp = state.playerHp;
+
+    var winnerId = null;
+    if (iWon) {
+      winnerId = myId;
+    } else {
+      var sorted = allPlayers.slice().sort(function (a, b) {
+        return (b.hp || 0) - (a.hp || 0);
+      });
+      if (sorted[0]) winnerId = sorted[0].id;
+    }
+
+    GameAudio.stopBgm(true);
+    if (iWon) GameAudio.victory();
+    else GameAudio.defeat();
+
+    var wpm = calcWpm();
+    var acc = calcAcc();
+
+    setTimeout(function () {
+      UI.showResult({
+        victory: iWon,
+        wpm: wpm,
+        accuracy: acc,
+        maxCombo: state.maxCombo,
+        score: state.score,
+        mpWinner: winnerId,
+        mpPlayers: allPlayers,
+      });
+    }, 1000);
   }
 
   function nextWord() {
@@ -646,14 +683,10 @@ var Game = (function () {
           Multiplayer.sendDamage(opp.id, oppDmg);
         });
         Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
-        setTimeout(function () {
-          _checkWinCondition();
-        }, 300);
-      } else {
-        setTimeout(function () {
-          _checkWinCondition();
-        }, 300);
       }
+      setTimeout(function () {
+        _checkWinCondition();
+      }, 400);
     }
     if (
       state.enemies.every(function (e) {
@@ -695,13 +728,14 @@ var Game = (function () {
       if (phEl) phEl.textContent = "PHASE " + e.phase;
     }
     if (e.hp <= 0) {
-      if (card) {
-        Effects.killEffect(card);
-        card.style.opacity = "0";
-        card.style.transform = "scale(0)";
-        card.style.transition = "all .3s";
+      var card2 = document.getElementById("enemy-" + e.id);
+      if (card2) {
+        Effects.killEffect(card2);
+        card2.style.opacity = "0";
+        card2.style.transform = "scale(0)";
+        card2.style.transition = "all .3s";
         setTimeout(function () {
-          if (card.parentElement) card.remove();
+          if (card2.parentElement) card2.remove();
         }, 300);
       }
       clearTimeout(e.attackTimer);
@@ -861,7 +895,8 @@ var Game = (function () {
   }
 
   function _checkWinCondition() {
-    if (!state.running || !state.multiplayer) return;
+    if (!state.multiplayer || state._endingMp || state._eliminated) return;
+    if (!state.running) return;
     var myId = Multiplayer.getPlayerId();
     var allPlayers = Multiplayer.getPlayers();
     var opponents = allPlayers.filter(function (p) {
@@ -872,12 +907,19 @@ var Game = (function () {
       return (p.hp || 0) > 0;
     });
     if (aliveOpponents.length === 0) {
-      endMp(true);
+      state.running = false;
+      clearInterval(state.timerInterval);
+      clearInterval(state.winCheckInterval);
+      state.enemies.forEach(function (e) {
+        clearTimeout(e.attackTimer);
+        if (e.burnTick) clearInterval(e.burnTick);
+      });
+      _finishMp(true);
     }
   }
 
   function endMpByTime() {
-    if (!state.running) return;
+    if (state._endingMp) return;
     var myId = Multiplayer.getPlayerId();
     var allPlayers = Multiplayer.getPlayers();
     var myPlayer = allPlayers.find(function (p) {
@@ -890,7 +932,10 @@ var Game = (function () {
     var winner = sorted[0];
     var iWon = winner && winner.id === myId;
     Effects.showToast("WAKTU HABIS!", "warning");
-    endMp(iWon, winner ? winner.id : null);
+    state.running = false;
+    clearInterval(state.timerInterval);
+    clearInterval(state.winCheckInterval);
+    _finishMp(iWon);
   }
 
   function calcWpm() {
@@ -1006,12 +1051,13 @@ var Game = (function () {
     state.multiplayer = true;
     state.mpTimeLimit = MP_DURATION;
     state._eliminated = false;
+    state._endingMp = false;
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "block";
 
     clearInterval(state.winCheckInterval);
     state.winCheckInterval = setInterval(function () {
-      if (!state.running) return;
+      if (!state.running || state._eliminated) return;
       _checkWinCondition();
     }, 1000);
 
@@ -1046,7 +1092,7 @@ var Game = (function () {
         if (incoming < state.playerHp) {
           state.playerHp = incoming;
           renderHpBars();
-          if (state.playerHp <= 0 && state.running) {
+          if (state.playerHp <= 0 && state.running && !state._eliminated) {
             _handleMpDeath();
           }
         }
@@ -1062,20 +1108,19 @@ var Game = (function () {
       updateMpSidebar();
       renderHpBars();
 
-      _checkWinCondition();
+      if (!state._eliminated) _checkWinCondition();
     });
 
     Multiplayer.on("players_update", function () {
-      if (!state.running) return;
       updateMpSidebar();
       renderHpBars();
-      _checkWinCondition();
+      if (state.running && !state._eliminated) _checkWinCondition();
     });
 
     Multiplayer.on("damage_dealt", function (data) {
       var myId = Multiplayer.getPlayerId();
       if (data.to !== myId) return;
-      if (!state.running) return;
+      if (!state.running || state._eliminated) return;
       state.playerHp = Math.max(0, state.playerHp - data.amount);
       Multiplayer.updatePlayerHp(myId, state.playerHp);
       renderHpBars();
@@ -1086,7 +1131,7 @@ var Game = (function () {
         "error",
         1400,
       );
-      if (state.playerHp <= 0) _handleMpDeath();
+      if (state.playerHp <= 0 && !state._eliminated) _handleMpDeath();
     });
 
     updateMpSidebar();
@@ -1127,60 +1172,6 @@ var Game = (function () {
         );
       })
       .join("");
-  }
-
-  function endMp(iWon, forcedWinnerId) {
-    if (!state.running) return;
-    state.running = false;
-    clearInterval(state.timerInterval);
-    clearInterval(state.winCheckInterval);
-    state.enemies.forEach(function (e) {
-      clearTimeout(e.attackTimer);
-      if (e.burnTick) clearInterval(e.burnTick);
-    });
-    state._bots.forEach(clearInterval);
-    Multiplayer.stopBots();
-    GameAudio.stopBgm(true);
-
-    var wpm = calcWpm(),
-      acc = calcAcc();
-    var allPlayers = Multiplayer.getPlayers();
-    var myId = Multiplayer.getPlayerId();
-    var myPlayer = allPlayers.find(function (p) {
-      return p.id === myId;
-    });
-    if (myPlayer) myPlayer.hp = state.playerHp;
-
-    var winnerId = forcedWinnerId || null;
-    if (!winnerId) {
-      if (iWon) {
-        winnerId = myId;
-      } else {
-        var alive = allPlayers.filter(function (p) {
-          return p.id !== myId && (p.hp || 0) > 0;
-        });
-        if (alive.length > 0)
-          winnerId = alive.reduce(function (a, b) {
-            return (a.hp || 0) > (b.hp || 0) ? a : b;
-          }).id;
-        else winnerId = myId;
-      }
-    }
-
-    if (iWon) GameAudio.victory();
-    else GameAudio.defeat();
-
-    setTimeout(function () {
-      UI.showResult({
-        victory: iWon,
-        wpm: wpm,
-        accuracy: acc,
-        maxCombo: state.maxCombo,
-        score: state.score,
-        mpWinner: winnerId,
-        mpPlayers: allPlayers,
-      });
-    }, 800);
   }
 
   function endGame(victory) {
@@ -1230,7 +1221,6 @@ var Game = (function () {
     activateSkill,
     getState,
     endGame,
-    endMp,
     setupMultiplayer,
   };
 })();

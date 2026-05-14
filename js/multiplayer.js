@@ -119,18 +119,6 @@ var Multiplayer = (function () {
     });
   }
 
-  function _checkRematchReady(rv) {
-    var votes = rv || {};
-    var playerIds = Object.keys(players);
-    var totalPl = playerIds.length;
-    if (totalPl < MIN_PLAYERS) return false;
-    var totalV = playerIds.filter(function (k) {
-      return votes[k] === true;
-    }).length;
-    emit("rematch_votes_update", { votes: totalV, total: totalPl });
-    return isHost && totalV >= totalPl;
-  }
-
   function startPoll(code) {
     if (_poll) {
       clearInterval(_poll);
@@ -163,6 +151,7 @@ var Multiplayer = (function () {
         var rematchWord = r.rematchWord || "";
         if (rematchWord !== "" && _lastStatus !== "rematch_" + rematchWord) {
           _lastStatus = "rematch_" + rematchWord;
+          _rematchStarted = false;
           emit("rematch_start", {
             word: rematchWord,
             players: Object.values(players),
@@ -184,6 +173,11 @@ var Multiplayer = (function () {
           !_rematchStarted
         ) {
           _doRematch();
+        }
+
+        var kickedId = r.kickedPlayer || null;
+        if (kickedId && kickedId === pid) {
+          emit("kicked", {});
         }
       });
     }, 1200);
@@ -223,6 +217,7 @@ var Multiplayer = (function () {
       rematchWord: "",
       events: {},
       rematchVotes: {},
+      kickedPlayer: "",
     };
     data.players[pid] = _entry(p);
     return dbSet("rooms/" + code, data).then(function () {
@@ -350,6 +345,7 @@ var Multiplayer = (function () {
     listen("rooms/" + code + "/rematchWord", function (data) {
       if (data && data !== "" && _lastStatus !== "rematch_" + data) {
         _lastStatus = "rematch_" + data;
+        _rematchStarted = false;
         emit("rematch_start", { word: data, players: Object.values(players) });
       }
     });
@@ -377,6 +373,12 @@ var Multiplayer = (function () {
         _doRematch();
       }
     });
+
+    listen("rooms/" + code + "/kickedPlayer", function (data) {
+      if (data && data === pid) {
+        emit("kicked", {});
+      }
+    });
   }
 
   function _handleEv(ev) {
@@ -392,15 +394,29 @@ var Multiplayer = (function () {
     var grid = document.getElementById("lobbyPlayers");
     if (!grid) return;
     var playerList = Object.values(players);
+    var hostId = null;
+    dbGet("rooms/" + room + "/host").then(function (h) {
+      hostId = h;
+    });
+
     grid.innerHTML = playerList
       .map(function (p) {
+        var isMe = p.id === pid;
+        var kickBtn =
+          isHost && !isMe
+            ? '<button class="kick-btn bb" onclick="Multiplayer.kickPlayer(\'' +
+              p.id +
+              "')\">KICK</button>"
+            : "";
         return (
           '<div class="lpc ready"><div class="lpc-avatar">' +
           _renderAvatar(p.avatar) +
           '</div><div class="lpc-name bb">' +
           p.name +
-          (p.id === pid ? " (YOU)" : "") +
-          '</div><div class="lpc-status" style="color:var(--g)">READY</div></div>'
+          (isMe ? " (YOU)" : "") +
+          '</div><div class="lpc-status" style="color:var(--g)">READY</div>' +
+          kickBtn +
+          "</div>"
         );
       })
       .join("");
@@ -414,6 +430,19 @@ var Multiplayer = (function () {
       startBtn.disabled = !canStart;
       startBtn.style.opacity = canStart ? "1" : "0.4";
     }
+  }
+
+  function kickPlayer(targetId) {
+    if (!isHost || !room || targetId === pid) return;
+    dbDel("rooms/" + room + "/players/" + targetId).then(function () {
+      dbSet("rooms/" + room + "/kickedPlayer", targetId).then(function () {
+        setTimeout(function () {
+          dbSet("rooms/" + room + "/kickedPlayer", "");
+        }, 3000);
+      });
+    });
+    if (players[targetId]) delete players[targetId];
+    _updateLobby();
   }
 
   function _renderAvatar(av) {
@@ -629,6 +658,7 @@ var Multiplayer = (function () {
     sendDamage,
     updatePlayerHp,
     leaveRoom,
+    kickPlayer,
     getPlayers,
     getPlayer,
     getCurrentRoom,

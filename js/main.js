@@ -180,15 +180,34 @@ var App = (function () {
     Multiplayer.on("rematch_start", function (data) {
       if (_leavingGame) return;
       _updateRematchStatus(0, 0);
+      _mpReady = true;
       var btnPlay = document.getElementById("btnPlayAgain");
       if (btnPlay) {
         btnPlay.disabled = false;
         btnPlay.textContent = "MAIN LAGI";
       }
+      var rsEl = document.getElementById("rematchStatus");
+      if (rsEl) rsEl.style.display = "none";
       startMpGame(data.word);
     });
     Multiplayer.on("rematch_votes_update", function (data) {
       _updateRematchStatus(data.votes, data.total);
+    });
+    Multiplayer.on("kicked", function () {
+      _mpReady = false;
+      _leavingGame = true;
+      Multiplayer.leaveRoom().then(function () {
+        _mpRoomCode = null;
+        _mpIsHost = false;
+        _leavingGame = false;
+        Effects.showToast(
+          "Kamu dikeluarkan dari room oleh host!",
+          "error",
+          3000,
+        );
+        UI.updateMenuDisplay(getProfile());
+        UI.showScreen("screen-menu");
+      });
     });
   }
 
@@ -206,8 +225,16 @@ var App = (function () {
         Multiplayer.getMaxPlayers() +
         " PILOT(S) IN LOBBY";
     if (grid) {
+      var myId = Multiplayer.getPlayerId();
       grid.innerHTML = players
         .map(function (p) {
+          var isMe = p.id === myId;
+          var kickBtn =
+            isHost && !isMe
+              ? '<button class="kick-btn bb" onclick="Multiplayer.kickPlayer(\'' +
+                p.id +
+                "')\">KICK</button>"
+              : "";
           return (
             '<div class="lpc ready">' +
             '<div class="lpc-avatar">' +
@@ -215,8 +242,10 @@ var App = (function () {
             "</div>" +
             '<div class="lpc-name bb">' +
             p.name +
+            (isMe ? " (YOU)" : "") +
             "</div>" +
             '<div class="lpc-status" style="color:var(--g)">READY</div>' +
+            kickBtn +
             "</div>"
           );
         })
@@ -489,7 +518,9 @@ var App = (function () {
         return;
       }
       Multiplayer.startGame().then(function () {
-        startMpGame();
+        var word = null;
+        var players = Multiplayer.getPlayers();
+        startMpGame(word);
       });
     });
 
