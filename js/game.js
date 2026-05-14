@@ -32,6 +32,7 @@ var Game = (function () {
     _botCompleted: false,
     wordCount: 0,
     mpTimeLimit: 0,
+    _eliminated: false,
   };
 
   var PLAYER_MAX_HP = 200;
@@ -103,6 +104,7 @@ var Game = (function () {
     state.wordCount = 0;
     state.multiplayer = false;
     state.mpTimeLimit = 0;
+    state._eliminated = false;
     clearInterval(state.timerInterval);
     clearInterval(state.winCheckInterval);
 
@@ -318,9 +320,87 @@ var Game = (function () {
     if (state.multiplayer)
       Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
     if (state.playerHp <= 0) {
-      if (state.multiplayer) endMp(false);
+      if (state.multiplayer) _handleMpDeath();
       else endGame(false);
     }
+  }
+
+  function _handleMpDeath() {
+    if (state._eliminated) return;
+    state._eliminated = true;
+
+    var myId = Multiplayer.getPlayerId();
+    var allPlayers = Multiplayer.getPlayers();
+    var aliveOpponents = allPlayers.filter(function (p) {
+      return p.id !== myId && (p.hp || 0) > 0;
+    });
+
+    if (aliveOpponents.length <= 1) {
+      endMp(false);
+      return;
+    }
+
+    state.running = false;
+    state.enemies.forEach(function (e) {
+      clearTimeout(e.attackTimer);
+      if (e.burnTick) clearInterval(e.burnTick);
+    });
+    state._bots.forEach(clearInterval);
+
+    Effects.showToast("KAU GUGUR! Menonton pertandingan...", "error", 3000);
+    GameAudio.defeat();
+
+    var inp = document.getElementById("gameInput");
+    if (inp) {
+      inp.disabled = true;
+      inp.value = "";
+    }
+    document.querySelectorAll(".key-btn").forEach(function (b) {
+      b.disabled = true;
+    });
+    document.querySelectorAll(".skill-btn").forEach(function (b) {
+      b.disabled = true;
+    });
+
+    var wordPanel = document.querySelector(".word-panel");
+    if (wordPanel) {
+      wordPanel.style.opacity = "0.3";
+      wordPanel.style.pointerEvents = "none";
+    }
+
+    Effects.showToast("Kamu eliminated! Menunggu hasil...", "error", 0);
+
+    var _spectateCheck = setInterval(function () {
+      var current = Multiplayer.getPlayers();
+      var stillAlive = current.filter(function (p) {
+        return p.id !== myId && (p.hp || 0) > 0;
+      });
+      if (stillAlive.length <= 1) {
+        clearInterval(_spectateCheck);
+        var wpm = calcWpm();
+        var acc = calcAcc();
+        var winner = null;
+        if (stillAlive.length === 1) winner = stillAlive[0].id;
+        else {
+          var sorted = current.slice().sort(function (a, b) {
+            return (b.hp || 0) - (a.hp || 0);
+          });
+          if (sorted[0]) winner = sorted[0].id;
+        }
+        setTimeout(function () {
+          GameAudio.stopBgm(true);
+          UI.showResult({
+            victory: false,
+            wpm: wpm,
+            accuracy: acc,
+            maxCombo: state.maxCombo,
+            score: state.score,
+            mpWinner: winner,
+            mpPlayers: current,
+          });
+        }, 1500);
+      }
+    }, 2000);
   }
 
   function nextWord() {
@@ -456,7 +536,7 @@ var Game = (function () {
       if (state.multiplayer)
         Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
       if (state.playerHp <= 0) {
-        if (state.multiplayer) endMp(false);
+        if (state.multiplayer) _handleMpDeath();
         else endGame(false);
         return;
       }
@@ -512,7 +592,7 @@ var Game = (function () {
       if (state.multiplayer)
         Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
       if (state.playerHp <= 0) {
-        if (state.multiplayer) endMp(false);
+        if (state.multiplayer) _handleMpDeath();
         else endGame(false);
         return;
       }
@@ -555,7 +635,7 @@ var Game = (function () {
     if (state.multiplayer) {
       var myId = Multiplayer.getPlayerId();
       var opponents = Multiplayer.getPlayers().filter(function (p) {
-        return p.id !== myId;
+        return p.id !== myId && (p.hp || 0) > 0;
       });
       if (opponents.length > 0) {
         var oppDmg = Math.floor((18 + comboDmg) * mult);
@@ -778,10 +858,10 @@ var Game = (function () {
       return p.id !== myId;
     });
     if (opponents.length === 0) return;
-    var allDead = opponents.every(function (p) {
-      return (p.hp || 0) <= 0;
+    var aliveOpponents = opponents.filter(function (p) {
+      return (p.hp || 0) > 0;
     });
-    if (allDead) endMp(true);
+    if (aliveOpponents.length === 0) endMp(true);
   }
 
   function endMpByTime() {
@@ -867,11 +947,15 @@ var Game = (function () {
             0,
             Math.min(100, (oppHp / PLAYER_MAX_HP) * 100),
           );
+          var deadStyle = oppHp <= 0 ? "opacity:0.4;" : "";
           html +=
-            '<div class="hpbar"><div class="hpbar-row"><span class="hpbar-name">' +
+            '<div class="hpbar" style="' +
+            deadStyle +
+            '"><div class="hpbar-row"><span class="hpbar-name">' +
             p.name +
+            (oppHp <= 0 ? " 💀" : "") +
             '</span><span class="hpbar-val">' +
-            Math.ceil(oppHp) +
+            Math.ceil(Math.max(0, oppHp)) +
             "/" +
             PLAYER_MAX_HP +
             '</span></div><div class="hpbar-track"><div class="hpbar-fill o" style="width:' +
@@ -909,17 +993,15 @@ var Game = (function () {
   function setupMultiplayer() {
     state.multiplayer = true;
     state.mpTimeLimit = MP_DURATION;
+    state._eliminated = false;
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "block";
 
     clearInterval(state.winCheckInterval);
     state.winCheckInterval = setInterval(function () {
-      if (!state.running) {
-        clearInterval(state.winCheckInterval);
-        return;
-      }
+      if (!state.running) return;
       _checkWinCondition();
-    }, 2000);
+    }, 2500);
 
     Multiplayer.on("player_progress", function () {
       updateMpSidebar();
@@ -945,7 +1027,6 @@ var Game = (function () {
     });
 
     Multiplayer.on("hp_update", function (data) {
-      if (!state.running) return;
       var myId = Multiplayer.getPlayerId();
 
       if (data.playerId === myId) {
@@ -953,9 +1034,8 @@ var Game = (function () {
         if (incoming < state.playerHp) {
           state.playerHp = incoming;
           renderHpBars();
-          if (state.playerHp <= 0) {
-            endMp(false);
-            return;
+          if (state.playerHp <= 0 && state.running) {
+            _handleMpDeath();
           }
         }
         return;
@@ -970,15 +1050,18 @@ var Game = (function () {
       updateMpSidebar();
       renderHpBars();
 
+      if (!state.running) return;
+
       var opponents = allPlayers.filter(function (p) {
         return p.id !== myId;
       });
-      var allDead =
-        opponents.length > 0 &&
-        opponents.every(function (p) {
-          return (p.hp || 0) <= 0;
-        });
-      if (allDead) endMp(true);
+      var aliveOpponents = opponents.filter(function (p) {
+        return (p.hp || 0) > 0;
+      });
+
+      if (opponents.length > 0 && aliveOpponents.length === 0) {
+        endMp(true);
+      }
     });
 
     Multiplayer.on("damage_dealt", function (data) {
@@ -995,7 +1078,7 @@ var Game = (function () {
         "error",
         1400,
       );
-      if (state.playerHp <= 0) endMp(false);
+      if (state.playerHp <= 0) _handleMpDeath();
     });
 
     updateMpSidebar();
@@ -1009,11 +1092,22 @@ var Game = (function () {
       .map(function (p) {
         var hp = typeof p.hp === "number" ? p.hp : PLAYER_MAX_HP;
         var hpPct = Math.max(0, Math.min(100, (hp / PLAYER_MAX_HP) * 100));
-        var hpColor = hp > 100 ? "var(--g)" : hp > 60 ? "var(--o)" : "var(--r)";
+        var hpColor =
+          hp > 100
+            ? "var(--g)"
+            : hp > 60
+              ? "var(--o)"
+              : hp > 0
+                ? "var(--r)"
+                : "#444";
+        var deadTag = hp <= 0 ? " 💀" : "";
         return (
-          '<div class="mp-prow"><span class="mp-pname">' +
+          '<div class="mp-prow" style="' +
+          (hp <= 0 ? "opacity:0.4;" : "") +
+          '"><span class="mp-pname">' +
           p.name +
           (p.id === myId ? " (YOU)" : "") +
+          deadTag +
           '</span><div class="mp-hpw"><div class="mp-hpf" style="width:' +
           hpPct +
           "%;background:" +

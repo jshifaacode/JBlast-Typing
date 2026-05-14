@@ -102,6 +102,7 @@ var App = (function () {
         inp.style.pointerEvents = "";
         inp.style.width = "";
         inp.style.height = "";
+        inp.disabled = false;
       }
       setTimeout(function () {
         if (inp && !_leavingGame) inp.focus();
@@ -124,6 +125,21 @@ var App = (function () {
     if (_inMpGame) return;
     _inMpGame = true;
     _leavingGame = false;
+
+    var inp = document.getElementById("gameInput");
+    if (inp) inp.disabled = false;
+    document.querySelectorAll(".key-btn").forEach(function (b) {
+      b.disabled = false;
+    });
+    document.querySelectorAll(".skill-btn").forEach(function (b) {
+      b.disabled = true;
+    });
+    var wordPanel = document.querySelector(".word-panel");
+    if (wordPanel) {
+      wordPanel.style.opacity = "";
+      wordPanel.style.pointerEvents = "";
+    }
+
     var p = getProfile();
     UI.showScreen("screen-game");
     _setupGameScreen();
@@ -143,13 +159,13 @@ var App = (function () {
       el.textContent = "";
       return;
     }
-    if (votes > 0 && votes < total) {
+    if (votes >= total) {
+      el.style.display = "block";
+      el.textContent = "Semua siap! Memulai rematch...";
+    } else if (votes > 0) {
       el.style.display = "block";
       el.textContent =
         "Voting rematch: " + votes + "/" + total + " pemain siap...";
-    } else if (votes >= total) {
-      el.style.display = "block";
-      el.textContent = "Semua siap! Memulai rematch...";
     } else {
       el.style.display = "none";
       el.textContent = "";
@@ -164,6 +180,11 @@ var App = (function () {
     Multiplayer.on("rematch_start", function (data) {
       if (_leavingGame) return;
       _updateRematchStatus(0, 0);
+      var btnPlay = document.getElementById("btnPlayAgain");
+      if (btnPlay) {
+        btnPlay.disabled = false;
+        btnPlay.textContent = "MAIN LAGI";
+      }
       startMpGame(data.word);
     });
     Multiplayer.on("rematch_votes_update", function (data) {
@@ -521,7 +542,7 @@ var App = (function () {
       var active = document.querySelector(".screen.active");
       if (active && active.id === "screen-game" && !isMobile()) {
         var inp = document.getElementById("gameInput");
-        if (inp && document.activeElement !== inp) inp.focus();
+        if (inp && document.activeElement !== inp && !inp.disabled) inp.focus();
       }
     });
 
