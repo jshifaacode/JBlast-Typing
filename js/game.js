@@ -19,6 +19,7 @@ var Game = (function () {
     paused: false,
     gameTimer: 0,
     timerInterval: null,
+    winCheckInterval: null,
     skills: {
       overdrive: { active: false, cooldown: 0 },
       freeze: { active: false, cooldown: 0 },
@@ -103,6 +104,7 @@ var Game = (function () {
     state.multiplayer = false;
     state.mpTimeLimit = 0;
     clearInterval(state.timerInterval);
+    clearInterval(state.winCheckInterval);
 
     ["Overdrive", "Freeze", "Burn"].forEach(function (sk) {
       var btn = document.getElementById("skill" + sk);
@@ -768,6 +770,20 @@ var Game = (function () {
     }, 1000);
   }
 
+  function _checkWinCondition() {
+    if (!state.running || !state.multiplayer) return;
+    var myId = Multiplayer.getPlayerId();
+    var allPlayers = Multiplayer.getPlayers();
+    var opponents = allPlayers.filter(function (p) {
+      return p.id !== myId;
+    });
+    if (opponents.length === 0) return;
+    var allDead = opponents.every(function (p) {
+      return (p.hp || 0) <= 0;
+    });
+    if (allDead) endMp(true);
+  }
+
   function endMpByTime() {
     if (!state.running) return;
     var myId = Multiplayer.getPlayerId();
@@ -839,7 +855,6 @@ var Game = (function () {
       "%; " +
       pStyle +
       '"></div></div></div>';
-
     if (state.multiplayer) {
       var myId = Multiplayer.getPlayerId();
       Multiplayer.getPlayers()
@@ -897,10 +912,20 @@ var Game = (function () {
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "block";
 
+    clearInterval(state.winCheckInterval);
+    state.winCheckInterval = setInterval(function () {
+      if (!state.running) {
+        clearInterval(state.winCheckInterval);
+        return;
+      }
+      _checkWinCondition();
+    }, 2000);
+
     Multiplayer.on("player_progress", function () {
       updateMpSidebar();
       renderHpBars();
     });
+
     Multiplayer.on("player_typing", function (data) {
       var ind = document.getElementById("typingIndicators");
       if (!ind) return;
@@ -918,9 +943,11 @@ var Game = (function () {
         if (dot.parentElement) dot.remove();
       }, 1600);
     });
+
     Multiplayer.on("hp_update", function (data) {
       if (!state.running) return;
       var myId = Multiplayer.getPlayerId();
+
       if (data.playerId === myId) {
         var incoming = Math.max(0, data.hp);
         if (incoming < state.playerHp) {
@@ -933,9 +960,16 @@ var Game = (function () {
         }
         return;
       }
+
+      var allPlayers = Multiplayer.getPlayers();
+      var target = allPlayers.find(function (p) {
+        return p.id === data.playerId;
+      });
+      if (target) target.hp = data.hp;
+
       updateMpSidebar();
       renderHpBars();
-      var allPlayers = Multiplayer.getPlayers();
+
       var opponents = allPlayers.filter(function (p) {
         return p.id !== myId;
       });
@@ -946,6 +980,7 @@ var Game = (function () {
         });
       if (allDead) endMp(true);
     });
+
     Multiplayer.on("damage_dealt", function (data) {
       var myId = Multiplayer.getPlayerId();
       if (data.to !== myId) return;
@@ -962,6 +997,7 @@ var Game = (function () {
       );
       if (state.playerHp <= 0) endMp(false);
     });
+
     updateMpSidebar();
   }
 
@@ -995,6 +1031,7 @@ var Game = (function () {
     if (!state.running) return;
     state.running = false;
     clearInterval(state.timerInterval);
+    clearInterval(state.winCheckInterval);
     state.enemies.forEach(function (e) {
       clearTimeout(e.attackTimer);
       if (e.burnTick) clearInterval(e.burnTick);
@@ -1002,6 +1039,7 @@ var Game = (function () {
     state._bots.forEach(clearInterval);
     Multiplayer.stopBots();
     GameAudio.stopBgm(true);
+
     var wpm = calcWpm(),
       acc = calcAcc();
     var allPlayers = Multiplayer.getPlayers();
@@ -1010,6 +1048,7 @@ var Game = (function () {
       return p.id === myId;
     });
     if (myPlayer) myPlayer.hp = state.playerHp;
+
     var winnerId = forcedWinnerId || null;
     if (!winnerId) {
       if (iWon) {
@@ -1022,10 +1061,13 @@ var Game = (function () {
           winnerId = alive.reduce(function (a, b) {
             return (a.hp || 0) > (b.hp || 0) ? a : b;
           }).id;
+        else winnerId = myId;
       }
     }
+
     if (iWon) GameAudio.victory();
     else GameAudio.defeat();
+
     setTimeout(function () {
       UI.showResult({
         victory: iWon,
@@ -1043,6 +1085,7 @@ var Game = (function () {
     if (!state.running) return;
     state.running = false;
     clearInterval(state.timerInterval);
+    clearInterval(state.winCheckInterval);
     state.enemies.forEach(function (e) {
       clearTimeout(e.attackTimer);
       if (e.burnTick) clearInterval(e.burnTick);
