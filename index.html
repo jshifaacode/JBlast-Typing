@@ -16,6 +16,10 @@
       href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Rajdhani:wght@500;700&display=swap"
       rel="stylesheet"
     />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
     <link rel="stylesheet" href="styles/style.css" />
   </head>
   <body>
@@ -29,61 +33,80 @@
         <div class="modal-hdr bb">CARA BERMAIN</div>
         <div class="modal-body">
           <div class="htp-section">
-            <div class="htp-title bb">⚔️ SOLO MISSION</div>
+            <div class="htp-title bb">
+              <i class="fa-solid fa-sword"></i> SOLO MISSION
+            </div>
             <div class="htp-text">
               Lawan AI bot dalam 6 wave. Ketik kata yang muncul dengan cepat dan
               akurat untuk menyerang musuh. Selesaikan semua wave untuk menang!
             </div>
           </div>
           <div class="htp-section">
-            <div class="htp-title bb">🔥 MULTIPLAYER ARENA</div>
+            <div class="htp-title bb">
+              <i class="fa-solid fa-users"></i> MULTIPLAYER ARENA
+            </div>
             <div class="htp-text">
               Battle real-time vs pemain lain. Buat room atau join room teman.
               Minimal 2 pemain, maksimal 4 pemain. Host yang bisa start game.
             </div>
           </div>
           <div class="htp-section">
-            <div class="htp-title bb">💊 HP & DAMAGE</div>
+            <div class="htp-title bb">
+              <i class="fa-solid fa-heart-pulse"></i> HP &amp; DAMAGE
+            </div>
             <div class="htp-text">
-              • Ketik kata benar → serang musuh + heal dirimu<br />
-              • Ketik salah → -2 HP kamu<br />
-              • Musuh menyerang otomatis tiap beberapa detik<br />
-              • Di multiplayer, kata benar = serang semua lawan<br />
-              • HP habis = kalah
+              Ketik kata benar &rarr; serang musuh + heal dirimu<br />
+              Ketik salah &rarr; -2 HP kamu<br />
+              Musuh menyerang otomatis tiap beberapa detik<br />
+              Di multiplayer, kata benar = serang semua lawan<br />
+              HP habis = kalah
             </div>
           </div>
           <div class="htp-section">
-            <div class="htp-title bb">⚡ COMBO SYSTEM</div>
+            <div class="htp-title bb">
+              <i class="fa-solid fa-bolt"></i> COMBO SYSTEM
+            </div>
             <div class="htp-text">
               Ketik kata berturut-turut tanpa salah untuk membangun COMBO. Combo
               tinggi = damage lebih besar + heal lebih banyak!
             </div>
           </div>
           <div class="htp-section">
-            <div class="htp-title bb">🛠️ SKILLS</div>
+            <div class="htp-title bb">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> SKILLS
+            </div>
             <div class="htp-text">
-              • <span style="color: var(--y)">⚡ OVERDRIVE [1]</span> — Damage
-              x2 selama 6 detik<br />
-              • <span style="color: var(--c)">❄️ FREEZE [2]</span> — Bekukan
-              musuh 5 detik (serangan melambat)<br />
-              • <span style="color: var(--r)">🔥 BURN [3]</span> — Bakar musuh,
-              DoT damage<br />
-              Skill terbuka setiap 3 kata berhasil diketik. Di mobile, tap
-              tombol skill.
+              <span style="color: var(--y)"
+                ><i class="fa-solid fa-bolt"></i> OVERDRIVE [1]</span
+              >
+              &mdash; Damage x2 selama 6 detik<br />
+              <span style="color: var(--c)"
+                ><i class="fa-solid fa-snowflake"></i> FREEZE [2]</span
+              >
+              &mdash; Bekukan musuh 5 detik<br />
+              <span style="color: var(--r)"
+                ><i class="fa-solid fa-fire"></i> BURN [3]</span
+              >
+              &mdash; Bakar musuh, DoT damage<br />
+              Skill terbuka setiap 3 kata berhasil diketik.
             </div>
           </div>
           <div class="htp-section">
-            <div class="htp-title bb">🏆 RANKING</div>
+            <div class="htp-title bb">
+              <i class="fa-solid fa-trophy"></i> RANKING
+            </div>
             <div class="htp-text">
-              S: WPM ≥45 & Akurasi ≥90%<br />
-              A: WPM ≥28 & Akurasi ≥82%<br />
-              B: WPM ≥15 & Akurasi ≥70%<br />
-              C: WPM ≥8 & Akurasi ≥55%<br />
+              S: WPM &ge;45 &amp; Akurasi &ge;90%<br />
+              A: WPM &ge;28 &amp; Akurasi &ge;82%<br />
+              B: WPM &ge;15 &amp; Akurasi &ge;70%<br />
+              C: WPM &ge;8 &amp; Akurasi &ge;55%<br />
               D/F: Di bawah itu
             </div>
           </div>
           <div class="htp-section">
-            <div class="htp-title bb">🔄 REMATCH (MULTIPLAYER)</div>
+            <div class="htp-title bb">
+              <i class="fa-solid fa-rotate"></i> REMATCH (MULTIPLAYER)
+            </div>
             <div class="htp-text">
               Setelah game selesai, klik MAIN LAGI. Ketika semua pemain klik,
               rematch otomatis dimulai tanpa perlu balik ke lobby!
@@ -91,7 +114,7 @@
           </div>
         </div>
         <button class="btn bb" id="btnCloseHowToPlay" style="margin-top: 12px">
-          MENGERTI ▶
+          MENGERTI
         </button>
       </div>
     </div>
@@ -132,13 +155,15 @@
           <div class="skin-opts" id="skinOptions"></div>
         </div>
         <button class="btn bb" id="btnConfirmLogin" style="margin-top: 10px">
-          KONFIRMASI ▶
+          KONFIRMASI
         </button>
       </div>
 
       <div id="screen-menu" class="screen">
         <div class="pilot-card">
-          <div class="pilot-av" id="menuAvatar">⚡</div>
+          <div class="pilot-av" id="menuAvatar">
+            <i class="fa-solid fa-bolt"></i>
+          </div>
           <div class="pilot-info">
             <div class="pilot-name bb" id="menuUsername">PILOT</div>
             <div class="pilot-lvl bb" id="menuLevel">LVL 1</div>
@@ -163,54 +188,68 @@
         </div>
         <div class="profile-row">
           <button class="btn-ghost bb" id="btnEditProfile">
-            ✏ EDIT PROFIL
+            <i class="fa-solid fa-pen"></i> EDIT PROFIL
           </button>
           <button
             class="btn-ghost bb"
             id="btnLogout"
             style="color: var(--r); border-color: rgba(255, 34, 85, 0.25)"
           >
-            ⏻ LOGOUT
+            <i class="fa-solid fa-power-off"></i> LOGOUT
           </button>
         </div>
         <div class="divider bb">MISSION SELECT</div>
         <div class="menu-list">
           <div class="menu-row" id="btnSolo">
-            <span class="row-ico">⚔️</span>
+            <span class="row-ico"><i class="fa-solid fa-crosshairs"></i></span>
             <div class="row-txt">
               <div class="row-title bb">SOLO MISSION</div>
               <div class="row-desc">Practice — Lawan AI Bot</div>
             </div>
-            <span class="row-arr">▶</span>
+            <span class="row-arr"
+              ><i class="fa-solid fa-chevron-right"></i
+            ></span>
           </div>
           <div class="menu-row mp-row" id="btnMultiplayer">
-            <span class="row-ico">🔥</span>
+            <span class="row-ico"
+              ><i class="fa-solid fa-tower-broadcast"></i
+            ></span>
             <div class="row-txt">
               <div class="row-title bb">JBLAST TYPING ARENA</div>
               <div class="row-desc">Real-time battle vs player lain</div>
             </div>
             <span class="row-badge bb">ONLINE</span>
-            <span class="row-arr">▶</span>
+            <span class="row-arr"
+              ><i class="fa-solid fa-chevron-right"></i
+            ></span>
           </div>
           <div class="menu-row" id="btnStats">
-            <span class="row-ico">📊</span>
+            <span class="row-ico"
+              ><i class="fa-solid fa-chart-column"></i
+            ></span>
             <div class="row-txt">
               <div class="row-title bb">WAR RECORDS</div>
               <div class="row-desc">Lihat statistik pertarunganmu</div>
             </div>
-            <span class="row-arr">▶</span>
+            <span class="row-arr"
+              ><i class="fa-solid fa-chevron-right"></i
+            ></span>
           </div>
           <div class="menu-row" id="btnHowToPlay">
-            <span class="row-ico">📖</span>
+            <span class="row-ico"><i class="fa-solid fa-book-open"></i></span>
             <div class="row-txt">
               <div class="row-title bb">CARA BERMAIN</div>
               <div class="row-desc">Panduan lengkap gameplay</div>
             </div>
-            <span class="row-arr">▶</span>
+            <span class="row-arr"
+              ><i class="fa-solid fa-chevron-right"></i
+            ></span>
           </div>
         </div>
         <div class="audio-bar">
-          <button class="btn-ghost bb" id="btnToggleBgm">♪ BGM: ON</button>
+          <button class="btn-ghost bb" id="btnToggleBgm">
+            <i class="fa-solid fa-music"></i> BGM: ON
+          </button>
         </div>
       </div>
 
@@ -220,18 +259,22 @@
           id="btnBackFromMP"
           style="margin-bottom: 10px"
         >
-          ← KEMBALI
+          <i class="fa-solid fa-arrow-left"></i> KEMBALI
         </button>
         <div class="screen-hdr bb">JBLAST TYPING ARENA</div>
         <div class="mp-grid">
           <div class="mp-box">
-            <div class="mp-box-ico">🏠</div>
+            <div class="mp-box-ico">
+              <i class="fa-solid fa-house-signal"></i>
+            </div>
             <div class="mp-box-title bb">BUAT ROOM</div>
             <div class="mp-box-desc">Host private match kamu</div>
             <button class="btn bb" id="btnCreateRoom">CREATE ROOM</button>
           </div>
           <div class="mp-box">
-            <div class="mp-box-ico">🚀</div>
+            <div class="mp-box-ico">
+              <i class="fa-solid fa-right-to-bracket"></i>
+            </div>
             <div class="mp-box-title bb">JOIN ROOM</div>
             <div class="mp-box-desc">Masukkan kode dari temanmu</div>
             <input
@@ -253,7 +296,9 @@
         <div class="room-code-wrap">
           <span class="rc-lbl bb">ROOM CODE</span>
           <span class="rc-code bb" id="lobbyCode">-----</span>
-          <button class="btn sm bb" id="btnCopyCode">COPY KODE</button>
+          <button class="btn sm bb" id="btnCopyCode">
+            <i class="fa-solid fa-copy"></i> COPY
+          </button>
         </div>
         <div class="lobby-status-txt bb" id="lobbyStatus">
           Menunggu pemain...
@@ -264,7 +309,7 @@
         </div>
         <div class="lobby-actions">
           <button class="btn bb" id="btnStartMatch" style="display: none">
-            ▶ START MATCH
+            <i class="fa-solid fa-play"></i> START MATCH
           </button>
           <button class="btn-ghost bb" id="btnLeaveLobby">TINGGALKAN</button>
         </div>
@@ -293,7 +338,8 @@
             data-skill="overdrive"
             disabled
           >
-            <span class="sk-ico">⚡</span><span class="sk-nm bb">OVERDRIVE</span
+            <span class="sk-ico"><i class="fa-solid fa-bolt"></i></span>
+            <span class="sk-nm bb">OVERDRIVE</span
             ><span class="sk-key">[1]</span>
             <div class="skill-cd-bar" id="cdOverdrive"></div>
           </button>
@@ -303,8 +349,8 @@
             data-skill="freeze"
             disabled
           >
-            <span class="sk-ico">❄️</span><span class="sk-nm bb">FREEZE</span
-            ><span class="sk-key">[2]</span>
+            <span class="sk-ico"><i class="fa-solid fa-snowflake"></i></span>
+            <span class="sk-nm bb">FREEZE</span><span class="sk-key">[2]</span>
             <div class="skill-cd-bar" id="cdFreeze"></div>
           </button>
           <button
@@ -313,8 +359,8 @@
             data-skill="burn"
             disabled
           >
-            <span class="sk-ico">🔥</span><span class="sk-nm bb">BURN</span
-            ><span class="sk-key">[3]</span>
+            <span class="sk-ico"><i class="fa-solid fa-fire"></i></span>
+            <span class="sk-nm bb">BURN</span><span class="sk-key">[3]</span>
             <div class="skill-cd-bar" id="cdBurn"></div>
           </button>
         </div>
@@ -325,7 +371,9 @@
         </div>
         <div class="input-zone" id="inputZone">
           <div class="input-inner">
-            <span class="inp-caret bb">▶</span>
+            <span class="inp-caret bb"
+              ><i class="fa-solid fa-caret-right"></i
+            ></span>
             <input
               type="text"
               id="gameInput"
@@ -344,7 +392,9 @@
         </div>
         <div id="mobileKeyboard"></div>
         <div class="mp-sidebar" id="mpSidebar" style="display: none">
-          <div class="mp-sidebar-lbl bb">⚔ LIVE BATTLE</div>
+          <div class="mp-sidebar-lbl bb">
+            <i class="fa-solid fa-swords"></i> LIVE BATTLE
+          </div>
           <div id="mpPlayerList"></div>
         </div>
       </div>
@@ -389,7 +439,7 @@
           id="btnBackFromStats"
           style="margin-bottom: 10px"
         >
-          ← KEMBALI
+          <i class="fa-solid fa-arrow-left"></i> KEMBALI
         </button>
         <div class="screen-hdr bb">WAR RECORDS</div>
         <div class="stats-grid" id="statsGrid"></div>

@@ -14,7 +14,7 @@ var App = (function () {
         ? JSON.parse(s)
         : {
             name: "",
-            avatar: "⚡",
+            avatar: "fa-solid fa-bolt",
             skin: "default",
             xp: 0,
             level: 1,
@@ -131,7 +131,7 @@ var App = (function () {
     Game.setupMultiplayer();
     setTimeout(function () {
       _inMpGame = false;
-    }, 2000);
+    }, 3000);
   }
 
   function buildLobby(players, isHost, roomCode) {
@@ -151,11 +151,13 @@ var App = (function () {
       grid.innerHTML = players
         .map(function (p) {
           return (
-            '<div class="lpc ready"><div class="lpc-avatar">' +
-            (p.avatar || "⚡") +
-            '</div><div class="lpc-name bb">' +
+            '<div class="lpc ready"><div class="lpc-avatar"><i class="' +
+            (p.avatar || "fa-solid fa-bolt") +
+            '"></i></div>' +
+            '<div class="lpc-name bb">' +
             p.name +
-            '</div><div class="lpc-status" style="color:var(--g)">READY ✓</div></div>'
+            "</div>" +
+            '<div class="lpc-status" style="color:var(--g)">READY</div></div>'
           );
         })
         .join("");
@@ -192,11 +194,10 @@ var App = (function () {
     if (!el) return;
     if (votes > 0 && votes < total) {
       el.style.display = "block";
-      el.textContent =
-        "Voting rematch: " + votes + "/" + total + " pemain siap...";
+      el.textContent = "VOTE REMATCH: " + votes + "/" + total + " SIAP";
     } else if (votes >= total && total >= 2) {
       el.style.display = "block";
-      el.textContent = "Semua siap! Memulai rematch...";
+      el.textContent = "SEMUA SIAP! MEMULAI...";
     } else {
       el.style.display = "none";
       el.textContent = "";
@@ -257,7 +258,7 @@ var App = (function () {
         return;
       }
       var selAv = document.querySelector(".avatar-item.selected");
-      var avatar = selAv ? selAv.dataset.avatar : "⚡";
+      var avatar = selAv ? selAv.dataset.avatar : "fa-solid fa-bolt";
       var selSk = document.querySelector(".skin-opt.selected");
       var skin = selSk ? selSk.dataset.skin : "default";
       var p = getProfile();
@@ -292,7 +293,6 @@ var App = (function () {
       GameAudio.keyPress();
       showHowToPlay();
     });
-
     addTap("btnCloseHowToPlay", function () {
       hideHowToPlay();
     });
@@ -363,7 +363,9 @@ var App = (function () {
       var muted = !GameAudio.isMuted();
       GameAudio.setMuted(muted);
       var bgmBtn = document.getElementById("btnToggleBgm");
-      if (bgmBtn) bgmBtn.textContent = "♪ BGM: " + (muted ? "OFF" : "ON");
+      if (bgmBtn)
+        bgmBtn.innerHTML =
+          '<i class="fa-solid fa-music"></i> BGM: ' + (muted ? "OFF" : "ON");
       if (!muted && !GameAudio.isPlaying()) GameAudio.playBgm();
       Effects.showToast("BGM " + (muted ? "OFF" : "ON"), "info", 1200);
     });
@@ -538,7 +540,7 @@ var App = (function () {
         var rsEl = document.getElementById("rematchStatus");
         if (rsEl) {
           rsEl.style.display = "block";
-          rsEl.textContent = "Mengirim vote rematch...";
+          rsEl.textContent = "MENGIRIM VOTE...";
         }
         var btnPlay = document.getElementById("btnPlayAgain");
         if (btnPlay) {

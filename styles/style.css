@@ -552,11 +552,20 @@ body {
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--b2);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  gap: 3px;
+  font-size: 18px;
   cursor: pointer;
   transition: all 0.15s;
+}
+.av-label {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 7px;
+  color: var(--t3);
+  letter-spacing: 1px;
+  line-height: 1;
 }
 .avatar-item:hover {
   border-color: rgba(0, 245, 255, 0.4);
@@ -639,7 +648,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 22px;
+  color: var(--c);
 }
 .pilot-info {
   flex: 1;
@@ -966,8 +976,9 @@ body {
   border-color: rgba(57, 255, 20, 0.35);
 }
 .lpc-avatar {
-  font-size: 22px;
+  font-size: 18px;
   margin-bottom: 4px;
+  color: var(--c);
 }
 .lpc-name {
   font-family: "Bebas Neue", sans-serif;
@@ -1136,9 +1147,11 @@ body {
   background: rgba(255, 34, 85, 0.06);
 }
 .enemy-avatar {
-  font-size: 18px;
+  font-size: 22px;
   text-align: center;
   margin-bottom: 2px;
+  color: var(--c);
+  line-height: 1;
 }
 .enemy-name {
   font-family: "Bebas Neue", sans-serif;
@@ -1722,6 +1735,9 @@ body {
 .mp-pav {
   font-size: 11px;
   flex-shrink: 0;
+  color: var(--c);
+  width: 14px;
+  text-align: center;
 }
 .mp-pname {
   font-family: "Bebas Neue", sans-serif;

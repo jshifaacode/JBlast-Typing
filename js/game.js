@@ -40,7 +40,7 @@ var Game = (function () {
     {
       id: "bot",
       name: "ROGUE BOT",
-      avatar: "🤖",
+      avatar: "fa-solid fa-robot",
       maxHp: 80,
       attackDmg: 5,
       attackDelay: 12000,
@@ -48,7 +48,7 @@ var Game = (function () {
     {
       id: "virus",
       name: "VIRUS.EXE",
-      avatar: "🦠",
+      avatar: "fa-solid fa-biohazard",
       maxHp: 100,
       attackDmg: 7,
       attackDelay: 11000,
@@ -56,7 +56,7 @@ var Game = (function () {
     {
       id: "boss",
       name: "SYSTEM BOSS",
-      avatar: "💀",
+      avatar: "fa-solid fa-skull",
       maxHp: 180,
       attackDmg: 10,
       attackDelay: 9000,
@@ -65,7 +65,7 @@ var Game = (function () {
     {
       id: "glitch",
       name: "GLITCH_GHOST",
-      avatar: "👾",
+      avatar: "fa-solid fa-ghost",
       maxHp: 90,
       attackDmg: 6,
       attackDelay: 11000,
@@ -73,7 +73,7 @@ var Game = (function () {
     {
       id: "phantom",
       name: "PHANTOM.SYS",
-      avatar: "🕷️",
+      avatar: "fa-solid fa-spider",
       maxHp: 120,
       attackDmg: 8,
       attackDelay: 10000,
@@ -205,9 +205,9 @@ var Game = (function () {
     state._bots = [];
     state._botCompleted = false;
     var botNames = [
-      { n: "CYPHER_X", a: "🤖" },
-      { n: "VOID_RUNNER", a: "👾" },
-      { n: "GHOST_42", a: "💀" },
+      { n: "CYPHER_X", a: "fa-solid fa-robot" },
+      { n: "VOID_RUNNER", a: "fa-solid fa-microchip" },
+      { n: "GHOST_42", a: "fa-solid fa-skull" },
     ];
     var count = Math.min(state.wave, 2);
     var bots = botNames.slice(0, count).map(function (b, i) {
@@ -253,7 +253,7 @@ var Game = (function () {
     Effects.damageFlash();
     GameAudio.playerHit();
     Effects.showToast(
-      bot.avatar + " " + bot.name + " selesai duluan! -" + dmg + " HP",
+      bot.name + " SELESAI DULUAN! -" + dmg + " HP",
       "error",
       2000,
     );
@@ -267,9 +267,9 @@ var Game = (function () {
     card.className = "enemy-card" + (e.isBoss ? " enemy-boss" : "");
     card.id = "enemy-" + e.id;
     card.innerHTML =
-      '<div class="enemy-avatar">' +
+      '<div class="enemy-avatar"><i class="' +
       e.avatar +
-      "</div>" +
+      '"></i></div>' +
       '<div class="enemy-name bb">' +
       e.name +
       "</div>" +
@@ -567,7 +567,7 @@ var Game = (function () {
           Multiplayer.sendDamage(opp.id, oppDmg);
         });
         Effects.showToast(
-          "⚡ Serang lawan! -" + oppDmg + " HP",
+          "DISERANG LAWAN! -" + oppDmg + " HP",
           "warning",
           1400,
         );
@@ -602,12 +602,12 @@ var Game = (function () {
     if (e.isBoss) {
       if (e.hp < e.maxHp * 0.66 && e.phase === 1) {
         e.phase = 2;
-        Effects.showToast("⚠️ BOSS PHASE 2 — FASTER ATTACKS!", "warning");
+        Effects.showToast("BOSS PHASE 2 — FASTER ATTACKS!", "warning");
         e.attackDelay = e.attackDelay * 0.75;
       }
       if (e.hp < e.maxHp * 0.33 && e.phase === 2) {
         e.phase = 3;
-        Effects.showToast("🚨 BOSS PHASE 3 — ALL OUT!", "warning");
+        Effects.showToast("BOSS PHASE 3 — ALL OUT!", "warning");
         e.attackDelay = e.attackDelay * 0.6;
       }
       var phEl = document.getElementById("phase-" + e.id);
@@ -648,11 +648,7 @@ var Game = (function () {
     if (state.wave > 6) {
       endGame(true);
     } else {
-      Effects.showToast(
-        "⚡ WAVE " + state.wave + " INCOMING!",
-        "warning",
-        1200,
-      );
+      Effects.showToast("WAVE " + state.wave + " INCOMING!", "warning", 1200);
       setTimeout(spawnWave, 1600);
     }
   }
@@ -667,7 +663,7 @@ var Game = (function () {
         if (btn && btn.disabled) {
           btn.disabled = false;
           btn.classList.add("ready-glow");
-          Effects.showToast("⚡ SKILL READY: " + sk.toUpperCase(), "info");
+          Effects.showToast("SKILL READY: " + sk.toUpperCase(), "info");
           break;
         }
       }
@@ -685,7 +681,7 @@ var Game = (function () {
       skill.active = true;
       document.body.classList.add("overdrive");
       GameAudio.overdrive();
-      Effects.showToast("⚡ OVERDRIVE — DMG x2!", "warning");
+      Effects.showToast("OVERDRIVE — DMG x2!", "warning");
       setTimeout(function () {
         skill.active = false;
         document.body.classList.remove("overdrive");
@@ -703,7 +699,7 @@ var Game = (function () {
         }, 5000);
       });
       GameAudio.freeze();
-      Effects.showToast("❄️ ENEMIES FROZEN — 5 DETIK!", "info");
+      Effects.showToast("ENEMIES FROZEN — 5 DETIK!", "info");
       setCooldown("freeze", 18000);
     }
     if (name === "burn") {
@@ -725,7 +721,7 @@ var Game = (function () {
         }, 500);
       });
       GameAudio.burn();
-      Effects.showToast("🔥 BURN — DOT DAMAGE!", "warning");
+      Effects.showToast("BURN — DOT DAMAGE!", "warning");
       setCooldown("burn", 15000);
     }
     if (btn) btn.disabled = true;
@@ -751,7 +747,7 @@ var Game = (function () {
         cdEl.style.transform = "scaleX(0)";
         btn.disabled = false;
         btn.classList.add("ready-glow");
-        Effects.showToast("⚡ " + name.toUpperCase() + " READY!", "info");
+        Effects.showToast(name.toUpperCase() + " READY!", "info");
       }
     }, 50);
   }
@@ -778,8 +774,8 @@ var Game = (function () {
           .padStart(2, "0");
         var rs = (remaining % 60).toString().padStart(2, "0");
         if (el) el.textContent = rm + ":" + rs;
-        if (remaining === 30) Effects.showToast("⏰ 30 DETIK LAGI!", "warning");
-        if (remaining === 10) Effects.showToast("⏰ 10 DETIK!", "warning");
+        if (remaining === 30) Effects.showToast("30 DETIK LAGI!", "warning");
+        if (remaining === 10) Effects.showToast("10 DETIK LAGI!", "warning");
       }
     }, 1000);
   }
@@ -788,7 +784,7 @@ var Game = (function () {
     if (!state.running) return;
     var myId = Multiplayer.getPlayerId();
     Multiplayer.updatePlayerHp(myId, state.playerHp);
-    Effects.showToast("⏰ WAKTU HABIS!", "warning");
+    Effects.showToast("WAKTU HABIS!", "warning");
     setTimeout(function () {
       Multiplayer.fetchFinalPlayers().then(function (allPlayers) {
         var myPlayer = allPlayers.find(function (p) {
@@ -873,9 +869,9 @@ var Game = (function () {
             Math.min(100, (oppHp / PLAYER_MAX_HP) * 100),
           );
           html +=
-            '<div class="hpbar"><div class="hpbar-row"><span class="hpbar-name">' +
-            (p.avatar || "⚡") +
-            " " +
+            '<div class="hpbar"><div class="hpbar-row"><span class="hpbar-name"><i class="' +
+            (p.avatar || "fa-solid fa-bolt") +
+            '"></i> ' +
             p.name +
             '</span><span class="hpbar-val">' +
             Math.ceil(oppHp) +
@@ -889,9 +885,9 @@ var Game = (function () {
       state.enemies.forEach(function (e) {
         var pct = Math.max(0, (e.hp / e.maxHp) * 100);
         html +=
-          '<div class="hpbar"><div class="hpbar-row"><span class="hpbar-name">' +
+          '<div class="hpbar"><div class="hpbar-row"><span class="hpbar-name"><i class="' +
           e.avatar +
-          " " +
+          '"></i> ' +
           e.name +
           '</span><span class="hpbar-val">' +
           Math.ceil(e.hp) +
@@ -981,11 +977,7 @@ var Game = (function () {
       renderHpBars();
       Effects.damageFlash();
       GameAudio.playerHit();
-      Effects.showToast(
-        "💥 Lawan serang kamu! -" + data.amount + " HP",
-        "error",
-        1400,
-      );
+      Effects.showToast("DISERANG! -" + data.amount + " HP", "error", 1400);
       if (state.playerHp <= 0) endMp(false);
     });
     updateMpSidebar();
@@ -1001,9 +993,9 @@ var Game = (function () {
         var hpPct = Math.max(0, Math.min(100, (hp / PLAYER_MAX_HP) * 100));
         var hpColor = hp > 100 ? "var(--g)" : hp > 60 ? "var(--o)" : "var(--r)";
         return (
-          '<div class="mp-prow"><span class="mp-pav">' +
-          (p.avatar || "⚡") +
-          '</span><span class="mp-pname">' +
+          '<div class="mp-prow"><span class="mp-pav"><i class="' +
+          (p.avatar || "fa-solid fa-bolt") +
+          '"></i></span><span class="mp-pname">' +
           p.name +
           (p.id === myId ? " (YOU)" : "") +
           '</span><div class="mp-hpw"><div class="mp-hpf" style="width:' +

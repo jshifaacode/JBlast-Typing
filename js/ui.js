@@ -48,18 +48,18 @@ var UI = (function () {
 
   function buildAvatarGrid() {
     var avs = [
-      "⚡",
-      "💀",
-      "🔥",
-      "👾",
-      "🤖",
-      "🦾",
-      "🧬",
-      "💥",
-      "🛸",
-      "🔮",
-      "🌀",
-      "⚔️",
+      { icon: "fa-solid fa-bolt", label: "BOLT" },
+      { icon: "fa-solid fa-skull", label: "SKULL" },
+      { icon: "fa-solid fa-dragon", label: "DRAGON" },
+      { icon: "fa-solid fa-ghost", label: "GHOST" },
+      { icon: "fa-solid fa-robot", label: "ROBOT" },
+      { icon: "fa-solid fa-radiation", label: "HAZARD" },
+      { icon: "fa-solid fa-dna", label: "DNA" },
+      { icon: "fa-solid fa-meteor", label: "METEOR" },
+      { icon: "fa-solid fa-satellite", label: "SAT" },
+      { icon: "fa-solid fa-eye", label: "EYE" },
+      { icon: "fa-solid fa-infinity", label: "INF" },
+      { icon: "fa-solid fa-crosshairs", label: "AIM" },
     ];
     var grid = document.getElementById("avatarGrid");
     if (!grid) return;
@@ -69,10 +69,14 @@ var UI = (function () {
           '<div class="avatar-item' +
           (i === 0 ? " selected" : "") +
           '" data-avatar="' +
-          a +
+          a.icon +
           '">' +
-          a +
-          "</div>"
+          '<i class="' +
+          a.icon +
+          '"></i>' +
+          '<span class="av-label">' +
+          a.label +
+          "</span></div>"
         );
       })
       .join("");
@@ -81,11 +85,11 @@ var UI = (function () {
 
   function buildSkinOptions() {
     var skins = [
-      { id: "default", label: "◈ DEFAULT" },
-      { id: "fire", label: "🔥 FIRE" },
-      { id: "lightning", label: "⚡ LIGHTNING" },
-      { id: "glitch", label: "💀 GLITCH" },
-      { id: "ice", label: "❄️ ICE" },
+      { id: "default", label: "DEFAULT", icon: "fa-solid fa-circle" },
+      { id: "fire", label: "FIRE", icon: "fa-solid fa-fire" },
+      { id: "lightning", label: "LIGHTNING", icon: "fa-solid fa-bolt" },
+      { id: "glitch", label: "GLITCH", icon: "fa-solid fa-skull" },
+      { id: "ice", label: "ICE", icon: "fa-solid fa-snowflake" },
     ];
     var el = document.getElementById("skinOptions");
     if (!el) return;
@@ -97,6 +101,9 @@ var UI = (function () {
           '" data-skin="' +
           s.id +
           '">' +
+          '<i class="' +
+          s.icon +
+          '"></i> ' +
           s.label +
           "</div>"
         );
@@ -110,7 +117,10 @@ var UI = (function () {
       return document.getElementById(n);
     }
     if (g("menuUsername")) g("menuUsername").textContent = p.name || "PILOT";
-    if (g("menuAvatar")) g("menuAvatar").textContent = p.avatar || "⚡";
+    if (g("menuAvatar")) {
+      g("menuAvatar").innerHTML =
+        '<i class="' + (p.avatar || "fa-solid fa-bolt") + '"></i>';
+    }
     var xp = p.xp || 0;
     var lvl = Math.floor(Math.sqrt(xp / 50)) + 1;
     if (g("menuLevel")) g("menuLevel").textContent = "LVL " + lvl;
@@ -132,7 +142,9 @@ var UI = (function () {
         (stats.soloWins || 0) + "S / " + (stats.mpWins || 0) + "M";
     var bgmBtn = g("btnToggleBgm");
     if (bgmBtn)
-      bgmBtn.textContent = "♪ BGM: " + (GameAudio.isMuted() ? "OFF" : "ON");
+      bgmBtn.innerHTML =
+        '<i class="fa-solid fa-music"></i> BGM: ' +
+        (GameAudio.isMuted() ? "OFF" : "ON");
   }
 
   function buildStats(stats) {
@@ -185,11 +197,8 @@ var UI = (function () {
     if (!p.stats) p.stats = {};
     p.stats.gamesPlayed = (p.stats.gamesPlayed || 0) + 1;
     if (victory) {
-      if (isMultiplayer) {
-        p.stats.mpWins = (p.stats.mpWins || 0) + 1;
-      } else {
-        p.stats.soloWins = (p.stats.soloWins || 0) + 1;
-      }
+      if (isMultiplayer) p.stats.mpWins = (p.stats.mpWins || 0) + 1;
+      else p.stats.soloWins = (p.stats.soloWins || 0) + 1;
     }
     if (wpm >= (p.stats.bestWpm || 0)) p.stats.bestWpm = wpm;
     p.stats.avgAcc = Math.round(
@@ -206,7 +215,7 @@ var UI = (function () {
 
     var titleText;
     if (isMultiplayer) {
-      titleText = victory ? "🏆 KAU MENANG!" : "💀 KAU KALAH";
+      titleText = victory ? "KAU MENANG" : "KAU KALAH";
     } else {
       titleText = victory ? "MISSION COMPLETE" : "MISSION FAILED";
     }
@@ -233,7 +242,11 @@ var UI = (function () {
         var sorted = mpPlayers.slice().sort(function (a, b) {
           return (b.hp || 0) - (a.hp || 0);
         });
-        var medals = ["🥇", "🥈", "🥉"];
+        var medalIcons = [
+          '<i class="fa-solid fa-trophy" style="color:#ffd700"></i>',
+          '<i class="fa-solid fa-medal" style="color:#c0c0c0"></i>',
+          '<i class="fa-solid fa-medal" style="color:#cd7f32"></i>',
+        ];
         var posCls = ["p1", "p2", "p3", "px"];
         var rows = sorted
           .map(function (pl, idx) {
@@ -241,25 +254,32 @@ var UI = (function () {
             var isWinner = pl.id === mpWinner;
             var hp = Math.max(0, Math.floor(pl.hp || 0));
             var hpCls = hp > 100 ? "hi" : hp > 60 ? "md" : hp > 0 ? "lo" : "dd";
-            var medal = medals[idx] || idx + 1 + ".";
+            var medal = medalIcons[idx] || idx + 1 + ".";
             var pCls = posCls[Math.min(idx, 3)];
             var wpmStr = pl.wpm ? pl.wpm + " WPM" : "";
+            var crownStr = isWinner
+              ? ' <i class="fa-solid fa-crown" style="color:#ffd700;font-size:11px"></i>'
+              : "";
             return (
               '<div class="rank-row' +
               (isMe ? " me" : "") +
-              '"><div class="rank-pos ' +
+              '">' +
+              '<div class="rank-pos ' +
               pCls +
               '">' +
               medal +
-              '</div><div class="rank-info"><div class="rank-name">' +
-              (pl.avatar || "⚡") +
-              " " +
+              "</div>" +
+              '<div class="rank-info">' +
+              '<div class="rank-name"><i class="' +
+              (pl.avatar || "fa-solid fa-bolt") +
+              '"></i> ' +
               pl.name +
               (isMe ? " (YOU)" : "") +
-              (isWinner ? " 👑" : "") +
+              crownStr +
               '</div><div class="rank-wpm">' +
               wpmStr +
-              '</div></div><div class="rank-hp ' +
+              "</div></div>" +
+              '<div class="rank-hp ' +
               hpCls +
               '">' +
               hp +
@@ -297,7 +317,7 @@ function buildMobileKeyboard() {
     .map(function (row, ri) {
       var back =
         ri === 2
-          ? '<button class="key-btn key-back bb" data-key="BACK">←</button>'
+          ? '<button class="key-btn key-back bb" data-key="BACK"><i class="fa-solid fa-delete-left"></i></button>'
           : "";
       var space =
         ri === 2
