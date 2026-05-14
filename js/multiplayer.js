@@ -9,11 +9,9 @@ var Multiplayer = (function () {
   var _ls = [],
     _bots = [],
     _poll = null,
-    _kickPoll = null,
     _lastSnap = "",
     _lastStatus = "";
   var _rematchStarted = false;
-  var _kicked = false;
   var PLAYER_MAX_HP = 200;
   var MAX_PLAYERS = 4;
   var MIN_PLAYERS = 2;
@@ -107,10 +105,6 @@ var Multiplayer = (function () {
       clearInterval(_poll);
       _poll = null;
     }
-    if (_kickPoll) {
-      clearInterval(_kickPoll);
-      _kickPoll = null;
-    }
   }
 
   function _countActivePlayers() {
@@ -180,12 +174,6 @@ var Multiplayer = (function () {
         ) {
           _doRematch();
         }
-
-        var kickedId = r.kickedPlayer || null;
-        if (kickedId && kickedId === pid && !_kicked) {
-          _kicked = true;
-          emit("kicked", {});
-        }
       });
     }, 1200);
   }
@@ -210,7 +198,6 @@ var Multiplayer = (function () {
     pid = p.id;
     isHost = true;
     _rematchStarted = false;
-    _kicked = false;
     _lastStatus = "";
     _lastSnap = "";
     var code = genCode();
@@ -225,7 +212,6 @@ var Multiplayer = (function () {
       rematchWord: "",
       events: {},
       rematchVotes: {},
-      kickedPlayer: "",
     };
     data.players[pid] = _entry(p);
     return dbSet("rooms/" + code, data).then(function () {
@@ -274,7 +260,6 @@ var Multiplayer = (function () {
       isHost = false;
       room = code;
       _rematchStarted = false;
-      _kicked = false;
       _lastStatus = "";
       _lastSnap = "";
       return dbSet("rooms/" + code + "/players/" + pid, _entry(p))
@@ -382,17 +367,6 @@ var Multiplayer = (function () {
         _doRematch();
       }
     });
-
-    listen("rooms/" + code + "/kickedPlayer", function (data) {
-      if (!isHost && data && data === pid && !_kicked) {
-        _kicked = true;
-        emit("kicked", {});
-      }
-    });
-
-    if (!isHost) {
-      _startKickCheck(code);
-    }
   }
 
   function _handleEv(ev) {
@@ -416,12 +390,6 @@ var Multiplayer = (function () {
     grid.innerHTML = playerList
       .map(function (p) {
         var isMe = p.id === pid;
-        var kickBtn =
-          isHost && !isMe
-            ? '<button class="kick-btn bb" onclick="Multiplayer.kickPlayer(\'' +
-              p.id +
-              "')\">KICK</button>"
-            : "";
         return (
           '<div class="lpc ready"><div class="lpc-avatar">' +
           _renderAvatar(p.avatar) +
@@ -429,7 +397,6 @@ var Multiplayer = (function () {
           p.name +
           (isMe ? " (YOU)" : "") +
           '</div><div class="lpc-status" style="color:var(--g)">READY</div>' +
-          kickBtn +
           "</div>"
         );
       })
@@ -444,56 +411,6 @@ var Multiplayer = (function () {
       startBtn.disabled = !canStart;
       startBtn.style.opacity = canStart ? "1" : "0.4";
     }
-  }
-
-  function _startKickCheck(code) {
-    var kPoll = setInterval(function () {
-      if (!room || _kicked) {
-        clearInterval(kPoll);
-        return;
-      }
-      dbGet("rooms/" + code + "/kickedPlayer").then(function (val) {
-        if (val && val === pid && !_kicked) {
-          _kicked = true;
-          clearInterval(kPoll);
-          emit("kicked", {});
-        }
-      });
-    }, 500);
-    _ls.push({
-      close: function () {
-        clearInterval(kPoll);
-      },
-    });
-  }
-
-  function _startKickPoll(targetId) {
-    if (_kickPoll) clearInterval(_kickPoll);
-    _kickPoll = setInterval(function () {
-      dbGet("rooms/" + room + "/kickedPlayer").then(function (val) {
-        if (val && val === targetId) {
-          clearInterval(_kickPoll);
-          _kickPoll = null;
-          dbDel("rooms/" + room + "/players/" + targetId).then(function () {
-            if (players[targetId]) delete players[targetId];
-            _updateLobby();
-            dbSet("rooms/" + room + "/kickedPlayer", "");
-          });
-        }
-      });
-    }, 300);
-    setTimeout(function () {
-      if (_kickPoll) {
-        clearInterval(_kickPoll);
-        _kickPoll = null;
-      }
-    }, 8000);
-  }
-
-  function kickPlayer(targetId) {
-    if (!isHost || !room || targetId === pid) return;
-    dbSet("rooms/" + room + "/kickedPlayer", targetId);
-    _startKickPoll(targetId);
   }
 
   function _renderAvatar(av) {
@@ -616,24 +533,10 @@ var Multiplayer = (function () {
   function leaveRoom() {
     stopBots();
     stopListeners();
-    _kicked = false;
     if (room && pid) {
       dbDel("rooms/" + room + "/players/" + pid);
       if (isHost) dbDel("rooms/" + room);
     }
-    room = null;
-    players = {};
-    isHost = false;
-    _lastStatus = "";
-    _lastSnap = "";
-    _rematchStarted = false;
-    return Promise.resolve();
-  }
-
-  function leaveRoomAfterKick() {
-    stopBots();
-    stopListeners();
-    _kicked = false;
     room = null;
     players = {};
     isHost = false;
@@ -723,8 +626,6 @@ var Multiplayer = (function () {
     sendDamage,
     updatePlayerHp,
     leaveRoom,
-    leaveRoomAfterKick,
-    kickPlayer,
     getPlayers,
     getPlayer,
     getCurrentRoom,
