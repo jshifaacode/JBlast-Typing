@@ -12,6 +12,7 @@ var Multiplayer = (function () {
     _lastSnap = "",
     _lastStatus = "";
   var _rematchStarted = false;
+  var _kicked = false;
   var PLAYER_MAX_HP = 200;
   var MAX_PLAYERS = 4;
   var MIN_PLAYERS = 2;
@@ -176,7 +177,8 @@ var Multiplayer = (function () {
         }
 
         var kickedId = r.kickedPlayer || null;
-        if (kickedId && kickedId === pid) {
+        if (kickedId && kickedId === pid && !_kicked) {
+          _kicked = true;
           emit("kicked", {});
         }
       });
@@ -203,6 +205,7 @@ var Multiplayer = (function () {
     pid = p.id;
     isHost = true;
     _rematchStarted = false;
+    _kicked = false;
     _lastStatus = "";
     _lastSnap = "";
     var code = genCode();
@@ -266,6 +269,7 @@ var Multiplayer = (function () {
       isHost = false;
       room = code;
       _rematchStarted = false;
+      _kicked = false;
       _lastStatus = "";
       _lastSnap = "";
       return dbSet("rooms/" + code + "/players/" + pid, _entry(p))
@@ -375,7 +379,8 @@ var Multiplayer = (function () {
     });
 
     listen("rooms/" + code + "/kickedPlayer", function (data) {
-      if (data && data === pid) {
+      if (data && data === pid && !_kicked) {
+        _kicked = true;
         emit("kicked", {});
       }
     });
@@ -434,15 +439,17 @@ var Multiplayer = (function () {
 
   function kickPlayer(targetId) {
     if (!isHost || !room || targetId === pid) return;
-    dbDel("rooms/" + room + "/players/" + targetId).then(function () {
-      dbSet("rooms/" + room + "/kickedPlayer", targetId).then(function () {
+    dbSet("rooms/" + room + "/kickedPlayer", targetId).then(function () {
+      setTimeout(function () {
+        dbDel("rooms/" + room + "/players/" + targetId).then(function () {
+          if (players[targetId]) delete players[targetId];
+          _updateLobby();
+        });
         setTimeout(function () {
           dbSet("rooms/" + room + "/kickedPlayer", "");
-        }, 3000);
-      });
+        }, 5000);
+      }, 800);
     });
-    if (players[targetId]) delete players[targetId];
-    _updateLobby();
   }
 
   function _renderAvatar(av) {
@@ -565,10 +572,24 @@ var Multiplayer = (function () {
   function leaveRoom() {
     stopBots();
     stopListeners();
+    _kicked = false;
     if (room && pid) {
       dbDel("rooms/" + room + "/players/" + pid);
       if (isHost) dbDel("rooms/" + room);
     }
+    room = null;
+    players = {};
+    isHost = false;
+    _lastStatus = "";
+    _lastSnap = "";
+    _rematchStarted = false;
+    return Promise.resolve();
+  }
+
+  function leaveRoomAfterKick() {
+    stopBots();
+    stopListeners();
+    _kicked = false;
     room = null;
     players = {};
     isHost = false;
@@ -658,6 +679,7 @@ var Multiplayer = (function () {
     sendDamage,
     updatePlayerHp,
     leaveRoom,
+    leaveRoomAfterKick,
     kickPlayer,
     getPlayers,
     getPlayer,

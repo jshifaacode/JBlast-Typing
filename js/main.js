@@ -196,7 +196,7 @@ var App = (function () {
     Multiplayer.on("kicked", function () {
       _mpReady = false;
       _leavingGame = true;
-      Multiplayer.leaveRoom().then(function () {
+      Multiplayer.leaveRoomAfterKick().then(function () {
         _mpRoomCode = null;
         _mpIsHost = false;
         _leavingGame = false;
