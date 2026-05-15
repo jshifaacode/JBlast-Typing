@@ -298,12 +298,94 @@ var UI = (function () {
         mpEl.innerHTML =
           '<div class="rank-box"><div class="rank-box-ttl bb">BATTLE RANKING</div>' +
           rows +
+          "</div>" +
+          '<div class="rematch-vote-box" id="rematchVoteBox">' +
+          '<div class="rematch-vote-lbl bb">MAIN LAGI?</div>' +
+          '<div class="rematch-vote-btns">' +
+          '<button class="btn bb" id="btnVoteAccept"><i class="fa-solid fa-check"></i> ACCEPT</button>' +
+          '<button class="btn btn-red bb" id="btnVoteDecline"><i class="fa-solid fa-xmark"></i> DECLINE</button>' +
+          "</div>" +
+          '<div class="rematch-vote-status bb" id="rematchVoteStatus">Menunggu vote...</div>' +
           "</div>";
       } else {
         mpEl.innerHTML = "";
       }
     }
+
+    var btnPlayAgain = g("btnPlayAgain");
+    var btnBackToMenu = g("btnBackToMenu");
+    if (isMultiplayer) {
+      if (btnPlayAgain) btnPlayAgain.style.display = "none";
+      if (btnBackToMenu) btnBackToMenu.textContent = "KELUAR ROOM";
+    } else {
+      if (btnPlayAgain) btnPlayAgain.style.display = "";
+      if (btnBackToMenu) btnBackToMenu.textContent = "MAIN MENU";
+    }
+
     showScreen("screen-result");
+  }
+
+  function updateVoteDisplay(votes, players, myId) {
+    var statusEl = document.getElementById("rematchVoteStatus");
+    var voteBox = document.getElementById("rematchVoteBox");
+    if (!statusEl || !voteBox) return;
+
+    var total = players.length;
+    var acceptCount = players.filter(function (p) {
+      return votes[p.id] === true;
+    }).length;
+    var declineCount = players.filter(function (p) {
+      return votes[p.id] === false;
+    }).length;
+
+    players.forEach(function (p) {
+      var el = document.getElementById("vote-" + p.id);
+      if (!el) return;
+      if (votes[p.id] === true) {
+        el.innerHTML =
+          '<span style="color:var(--g);font-size:11px;font-weight:bold;">&#10003; ACCEPT</span>';
+      } else if (votes[p.id] === false) {
+        el.innerHTML =
+          '<span style="color:var(--r);font-size:11px;font-weight:bold;">&#10007; DECLINE</span>';
+      } else {
+        el.innerHTML =
+          '<span style="color:var(--t3);font-size:11px;">menunggu...</span>';
+      }
+    });
+
+    var myVote = votes[myId];
+    var acceptBtn = document.getElementById("btnVoteAccept");
+    var declineBtn = document.getElementById("btnVoteDecline");
+    if (myVote !== undefined) {
+      if (acceptBtn) {
+        acceptBtn.disabled = true;
+        acceptBtn.style.opacity = myVote === true ? "1" : "0.4";
+      }
+      if (declineBtn) {
+        declineBtn.disabled = true;
+        declineBtn.style.opacity = myVote === false ? "1" : "0.4";
+      }
+    } else {
+      if (acceptBtn) {
+        acceptBtn.disabled = false;
+        acceptBtn.style.opacity = "1";
+      }
+      if (declineBtn) {
+        declineBtn.disabled = false;
+        declineBtn.style.opacity = "1";
+      }
+    }
+
+    if (declineCount > 0) {
+      statusEl.textContent = declineCount + " pemain menolak rematch.";
+      statusEl.style.color = "var(--r)";
+    } else if (acceptCount >= total) {
+      statusEl.textContent = "Semua setuju! Memulai rematch...";
+      statusEl.style.color = "var(--g)";
+    } else {
+      statusEl.textContent = "ACCEPT: " + acceptCount + "/" + total + " pemain";
+      statusEl.style.color = "var(--c)";
+    }
   }
 
   return {
@@ -313,6 +395,7 @@ var UI = (function () {
     updateMenuDisplay,
     buildStats,
     showResult,
+    updateVoteDisplay,
   };
 })();
 
@@ -367,4 +450,4 @@ function isMobile() {
     ) || window.innerWidth < 640
   );
 }
-s
+s;

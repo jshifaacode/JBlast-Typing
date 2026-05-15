@@ -6,7 +6,6 @@ var App = (function () {
   var _inMpGame = false;
   var _mpReady = false;
   var _leavingGame = false;
-  var _mpListenersReady = false;
 
   function getProfile() {
     if (!profile) {
@@ -174,17 +173,12 @@ var App = (function () {
   }
 
   function _setupMpListeners() {
-    if (_mpListenersReady) return;
-    _mpListenersReady = true;
-
     Multiplayer.on("game_start", function (data) {
       if (_leavingGame) return;
       startMpGame(data.word);
     });
-
     Multiplayer.on("rematch_start", function (data) {
       if (_leavingGame) return;
-      _inMpGame = false;
       _updateRematchStatus(0, 0);
       _mpReady = true;
       var btnPlay = document.getElementById("btnPlayAgain");
@@ -196,9 +190,34 @@ var App = (function () {
       if (rsEl) rsEl.style.display = "none";
       startMpGame(data.word);
     });
-
     Multiplayer.on("rematch_votes_update", function (data) {
       _updateRematchStatus(data.votes, data.total);
+      var players = Multiplayer.getPlayers();
+      var myId = Multiplayer.getPlayerId();
+      UI.updateVoteDisplay(data.voteMap || {}, players, myId);
+      if (data.hasDecline) {
+        var voteBox = document.getElementById("rematchVoteBox");
+        if (voteBox) {
+          var btns = voteBox.querySelector(".rematch-vote-btns");
+          if (btns) btns.style.display = "none";
+        }
+      }
+    });
+    Multiplayer.on("kicked", function () {
+      _mpReady = false;
+      _leavingGame = true;
+      Multiplayer.leaveRoom().then(function () {
+        _mpRoomCode = null;
+        _mpIsHost = false;
+        _leavingGame = false;
+        Effects.showToast(
+          "Kamu dikeluarkan dari room oleh host!",
+          "error",
+          3000,
+        );
+        UI.updateMenuDisplay(getProfile());
+        UI.showScreen("screen-menu");
+      });
     });
   }
 
@@ -220,6 +239,12 @@ var App = (function () {
       grid.innerHTML = players
         .map(function (p) {
           var isMe = p.id === myId;
+          var kickBtn =
+            isHost && !isMe
+              ? '<button class="kick-btn bb" onclick="Multiplayer.kickPlayer(\'' +
+                p.id +
+                "')\">KICK</button>"
+              : "";
           return (
             '<div class="lpc ready">' +
             '<div class="lpc-avatar">' +
@@ -230,6 +255,7 @@ var App = (function () {
             (isMe ? " (YOU)" : "") +
             "</div>" +
             '<div class="lpc-status" style="color:var(--g)">READY</div>' +
+            kickBtn +
             "</div>"
           );
         })
@@ -403,7 +429,6 @@ var App = (function () {
       var btnCreate = document.getElementById("btnCreateRoom");
       btnCreate.disabled = true;
       btnCreate.textContent = "CREATING...";
-      _mpListenersReady = false;
       _setupMpListeners();
       Multiplayer.createRoom({
         id: p.id,
@@ -445,7 +470,6 @@ var App = (function () {
       var btnJoin = document.getElementById("btnJoinRoom");
       btnJoin.disabled = true;
       btnJoin.textContent = "JOINING...";
-      _mpListenersReady = false;
       _setupMpListeners();
       Multiplayer.joinRoom(code, {
         id: p.id,
@@ -503,13 +527,16 @@ var App = (function () {
         );
         return;
       }
-      Multiplayer.startGame();
+      Multiplayer.startGame().then(function () {
+        var word = null;
+        var players = Multiplayer.getPlayers();
+        startMpGame(word);
+      });
     });
 
     addTap("btnLeaveLobby", function () {
       _mpReady = false;
       _leavingGame = true;
-      _mpListenersReady = false;
       Multiplayer.leaveRoom().then(function () {
         _mpRoomCode = null;
         _mpIsHost = false;
@@ -560,6 +587,66 @@ var App = (function () {
       }
     });
 
+    document.addEventListener("click", function (e) {
+      var screen = document.querySelector(".screen.active");
+      if (!screen || screen.id !== "screen-result") return;
+
+      if (e.target.closest("#btnVoteAccept")) {
+        var acceptBtn = document.getElementById("btnVoteAccept");
+        var declineBtn = document.getElementById("btnVoteDecline");
+        if (acceptBtn) acceptBtn.disabled = true;
+        if (declineBtn) declineBtn.disabled = true;
+        Multiplayer.voteRematch(true);
+        var statusEl = document.getElementById("rematchVoteStatus");
+        if (statusEl)
+          statusEl.textContent = "Kamu ACCEPT — menunggu lainnya...";
+        GameAudio.keyPress();
+        return;
+      }
+
+      if (e.target.closest("#btnVoteDecline")) {
+        var acceptBtn2 = document.getElementById("btnVoteAccept");
+        var declineBtn2 = document.getElementById("btnVoteDecline");
+        if (acceptBtn2) acceptBtn2.disabled = true;
+        if (declineBtn2) declineBtn2.disabled = true;
+        Multiplayer.voteRematch(false);
+        var statusEl2 = document.getElementById("rematchVoteStatus");
+        if (statusEl2) {
+          statusEl2.textContent = "Kamu DECLINE — kembali ke menu...";
+          statusEl2.style.color = "var(--r)";
+        }
+        GameAudio.keyError();
+        setTimeout(function () {
+          _mpReady = false;
+          _mpListenersReady = false;
+          _leavingGame = true;
+          Multiplayer.leaveRoom().then(function () {
+            _mpRoomCode = null;
+            _mpIsHost = false;
+            _leavingGame = false;
+            UI.updateMenuDisplay(getProfile());
+            UI.showScreen("screen-menu");
+          });
+        }, 1200);
+        return;
+      }
+    });
+
+    document.addEventListener(
+      "touchend",
+      function (e) {
+        var screen = document.querySelector(".screen.active");
+        if (!screen || screen.id !== "screen-result") return;
+        if (
+          e.target.closest("#btnVoteAccept") ||
+          e.target.closest("#btnVoteDecline")
+        ) {
+          e.preventDefault();
+        }
+      },
+      { passive: false },
+    );
+
     addTap("btnPlayAgain", function () {
       var st = Game.getState();
       if (st.mode === "multiplayer" && _mpReady) {
@@ -595,7 +682,6 @@ var App = (function () {
       var st = Game.getState();
       if (st.mode === "multiplayer" && _mpReady) {
         _mpReady = false;
-        _mpListenersReady = false;
         Multiplayer.leaveRoom().then(function () {
           _mpRoomCode = null;
           _mpIsHost = false;

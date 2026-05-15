@@ -1978,6 +1978,50 @@ body.overdrive .input-zone {
 .rank-hp.dd {
   color: var(--t3);
 }
+.rank-vote {
+  flex-shrink: 0;
+  min-width: 60px;
+  text-align: right;
+}
+.rematch-vote-box {
+  margin-top: 14px;
+  background: var(--card);
+  border: 1px solid var(--b2);
+  border-radius: 6px;
+  padding: 14px 12px;
+  text-align: center;
+}
+.rematch-vote-lbl {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 18px;
+  color: var(--c);
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+.rematch-vote-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.rematch-vote-btns .btn {
+  flex: 1;
+  max-width: 150px;
+  padding: 10px 8px;
+  font-size: 13px;
+}
+.btn-red {
+  border-color: rgba(255, 34, 85, 0.5);
+  color: var(--r);
+}
+.btn-red:hover {
+  background: rgba(255, 34, 85, 0.1);
+}
+.rematch-vote-status {
+  font-size: 11px;
+  color: var(--c);
+  letter-spacing: 1px;
+}
 
 #screen-stats {
   padding-top: 8px;

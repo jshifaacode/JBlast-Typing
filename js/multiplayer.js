@@ -124,14 +124,23 @@ var Multiplayer = (function () {
   function _handleRematchVotes(votes) {
     var playerIds = Object.keys(players);
     var totalPlayers = playerIds.length;
-    var totalVotes = playerIds.filter(function (k) {
+    var totalAccept = playerIds.filter(function (k) {
       return votes[k] === true;
     }).length;
-    emit("rematch_votes_update", { votes: totalVotes, total: totalPlayers });
+    var hasDecline = playerIds.some(function (k) {
+      return votes[k] === false;
+    });
+    emit("rematch_votes_update", {
+      votes: totalAccept,
+      total: totalPlayers,
+      voteMap: votes,
+      hasDecline: hasDecline,
+    });
+    if (hasDecline) return;
     if (
       isHost &&
       totalPlayers >= MIN_PLAYERS &&
-      totalVotes >= totalPlayers &&
+      totalAccept >= totalPlayers &&
       !_rematchStarted &&
       !_doingRematch
     ) {
@@ -184,10 +193,19 @@ var Multiplayer = (function () {
         var totalV = Object.keys(players).filter(function (k) {
           return rv[k] === true;
         }).length;
+        var hasDeclinePoll = Object.keys(players).some(function (k) {
+          return rv[k] === false;
+        });
 
-        if (totalPl >= MIN_PLAYERS && totalV > 0) {
-          emit("rematch_votes_update", { votes: totalV, total: totalPl });
+        if (totalPl >= MIN_PLAYERS && (totalV > 0 || hasDeclinePoll)) {
+          emit("rematch_votes_update", {
+            votes: totalV,
+            total: totalPl,
+            voteMap: rv,
+            hasDecline: hasDeclinePoll,
+          });
           if (
+            !hasDeclinePoll &&
             isHost &&
             totalV >= totalPl &&
             !_rematchStarted &&
@@ -470,9 +488,10 @@ var Multiplayer = (function () {
     });
   }
 
-  function voteRematch() {
+  function voteRematch(accept) {
     if (!room || !pid) return Promise.resolve();
-    return dbSet("rooms/" + room + "/rematchVotes/" + pid, true);
+    var val = accept === false ? false : true;
+    return dbSet("rooms/" + room + "/rematchVotes/" + pid, val);
   }
 
   function startRematch() {
