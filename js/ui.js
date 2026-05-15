@@ -450,4 +450,3 @@ function isMobile() {
     ) || window.innerWidth < 640
   );
 }
-s;

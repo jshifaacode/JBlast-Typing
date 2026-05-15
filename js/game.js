@@ -386,14 +386,14 @@ var Game = (function () {
     state._spectateInterval = setInterval(function () {
       var current = Multiplayer.getPlayers();
       var stillAlive = current.filter(function (p) {
-        return p.id !== myId && (p.hp || 0) > 0;
+        return (p.hp || 0) > 0;
       });
-      if (stillAlive.length === 0) {
+      if (stillAlive.length <= 1) {
         clearInterval(state._spectateInterval);
         state._spectateInterval = null;
-        _finishMp(false);
+        if (!state._endingMp) _finishMp(false);
       }
-    }, 1000);
+    }, 800);
   }
 
   function _finishMp(iWon) {
@@ -917,26 +917,30 @@ var Game = (function () {
   }
 
   function _checkWinCondition() {
-    if (!state.multiplayer || state._endingMp || state._eliminated) return;
-    if (!state.running) return;
+    if (!state.multiplayer || state._endingMp) return;
+    if (!state.running && !state._eliminated) return;
     var myId = Multiplayer.getPlayerId();
     var allPlayers = Multiplayer.getPlayers();
-    var opponents = allPlayers.filter(function (p) {
-      return p.id !== myId;
-    });
-    if (opponents.length === 0) return;
-    var aliveOpponents = opponents.filter(function (p) {
+    if (allPlayers.length < 2) return;
+    var alivePlayers = allPlayers.filter(function (p) {
       return (p.hp || 0) > 0;
     });
-    if (aliveOpponents.length === 0) {
-      state.running = false;
-      clearInterval(state.timerInterval);
-      clearInterval(state.winCheckInterval);
-      state.enemies.forEach(function (e) {
-        clearTimeout(e.attackTimer);
-        if (e.burnTick) clearInterval(e.burnTick);
-      });
-      _finishMp(true);
+    if (alivePlayers.length <= 1) {
+      var iAmAlive = alivePlayers.length === 1 && alivePlayers[0].id === myId;
+      if (!state._eliminated) {
+        state.running = false;
+        clearInterval(state.timerInterval);
+        clearInterval(state.winCheckInterval);
+        state.enemies.forEach(function (e) {
+          clearTimeout(e.attackTimer);
+          if (e.burnTick) clearInterval(e.burnTick);
+        });
+        _finishMp(iAmAlive);
+      } else {
+        clearInterval(state._spectateInterval);
+        state._spectateInterval = null;
+        _finishMp(false);
+      }
     }
   }
 
@@ -1114,7 +1118,7 @@ var Game = (function () {
         if (incoming < state.playerHp) {
           state.playerHp = incoming;
           renderHpBars();
-          if (state.playerHp <= 0 && state.running && !state._eliminated) {
+          if (state.playerHp <= 0 && !state._eliminated) {
             _handleMpDeath();
           }
         }
@@ -1129,14 +1133,13 @@ var Game = (function () {
 
       updateMpSidebar();
       renderHpBars();
-
-      if (!state._eliminated) _checkWinCondition();
+      _checkWinCondition();
     });
 
     Multiplayer.on("players_update", function () {
       updateMpSidebar();
       renderHpBars();
-      if (state.running && !state._eliminated) _checkWinCondition();
+      _checkWinCondition();
     });
 
     Multiplayer.on("damage_dealt", function (data) {

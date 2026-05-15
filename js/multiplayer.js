@@ -160,9 +160,27 @@ var Multiplayer = (function () {
         var snap = JSON.stringify(r.players || {});
         if (snap !== _lastSnap) {
           _lastSnap = snap;
+          var oldPlayers = players;
           players = r.players || {};
           emit("players_update", { players: Object.values(players) });
           _updateLobby();
+          Object.keys(players).forEach(function (pid2) {
+            var p = players[pid2];
+            var old = oldPlayers[pid2];
+            if (!old || old.hp !== p.hp) {
+              emit("hp_update", {
+                playerId: pid2,
+                hp: p.hp !== undefined ? p.hp : PLAYER_MAX_HP,
+              });
+            }
+            if (!old || old.progress !== p.progress || old.wpm !== p.wpm) {
+              emit("player_progress", {
+                playerId: pid2,
+                progress: p.progress || 0,
+                wpm: p.wpm || 0,
+              });
+            }
+          });
         }
 
         var status = r.status || "lobby";
