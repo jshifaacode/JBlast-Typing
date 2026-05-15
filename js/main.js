@@ -6,6 +6,7 @@ var App = (function () {
   var _inMpGame = false;
   var _mpReady = false;
   var _leavingGame = false;
+  var _mpListenersReady = false;
 
   function getProfile() {
     if (!profile) {
@@ -173,12 +174,17 @@ var App = (function () {
   }
 
   function _setupMpListeners() {
+    if (_mpListenersReady) return;
+    _mpListenersReady = true;
+
     Multiplayer.on("game_start", function (data) {
       if (_leavingGame) return;
       startMpGame(data.word);
     });
+
     Multiplayer.on("rematch_start", function (data) {
       if (_leavingGame) return;
+      _inMpGame = false;
       _updateRematchStatus(0, 0);
       _mpReady = true;
       var btnPlay = document.getElementById("btnPlayAgain");
@@ -190,6 +196,7 @@ var App = (function () {
       if (rsEl) rsEl.style.display = "none";
       startMpGame(data.word);
     });
+
     Multiplayer.on("rematch_votes_update", function (data) {
       _updateRematchStatus(data.votes, data.total);
     });
@@ -396,6 +403,7 @@ var App = (function () {
       var btnCreate = document.getElementById("btnCreateRoom");
       btnCreate.disabled = true;
       btnCreate.textContent = "CREATING...";
+      _mpListenersReady = false;
       _setupMpListeners();
       Multiplayer.createRoom({
         id: p.id,
@@ -437,6 +445,7 @@ var App = (function () {
       var btnJoin = document.getElementById("btnJoinRoom");
       btnJoin.disabled = true;
       btnJoin.textContent = "JOINING...";
+      _mpListenersReady = false;
       _setupMpListeners();
       Multiplayer.joinRoom(code, {
         id: p.id,
@@ -494,16 +503,13 @@ var App = (function () {
         );
         return;
       }
-      Multiplayer.startGame().then(function () {
-        var word = null;
-        var players = Multiplayer.getPlayers();
-        startMpGame(word);
-      });
+      Multiplayer.startGame();
     });
 
     addTap("btnLeaveLobby", function () {
       _mpReady = false;
       _leavingGame = true;
+      _mpListenersReady = false;
       Multiplayer.leaveRoom().then(function () {
         _mpRoomCode = null;
         _mpIsHost = false;
@@ -589,6 +595,7 @@ var App = (function () {
       var st = Game.getState();
       if (st.mode === "multiplayer" && _mpReady) {
         _mpReady = false;
+        _mpListenersReady = false;
         Multiplayer.leaveRoom().then(function () {
           _mpRoomCode = null;
           _mpIsHost = false;

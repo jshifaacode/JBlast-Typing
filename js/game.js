@@ -388,12 +388,12 @@ var Game = (function () {
       var stillAlive = current.filter(function (p) {
         return p.id !== myId && (p.hp || 0) > 0;
       });
-      if (stillAlive.length <= 1) {
+      if (stillAlive.length === 0) {
         clearInterval(state._spectateInterval);
         state._spectateInterval = null;
         _finishMp(false);
       }
-    }, 1500);
+    }, 1000);
   }
 
   function _finishMp(iWon) {
@@ -404,40 +404,62 @@ var Game = (function () {
     state._spectateInterval = null;
 
     var myId = Multiplayer.getPlayerId();
-    var allPlayers = Multiplayer.getPlayers();
-    var myPlayer = allPlayers.find(function (p) {
-      return p.id === myId;
-    });
-    if (myPlayer) myPlayer.hp = state.playerHp;
+    var roomCode = Multiplayer.getCurrentRoom();
 
-    var winnerId = null;
-    if (iWon) {
-      winnerId = myId;
-    } else {
-      var sorted = allPlayers.slice().sort(function (a, b) {
-        return (b.hp || 0) - (a.hp || 0);
+    function _showResult(allPlayers) {
+      var myPlayer = allPlayers.find(function (p) {
+        return p.id === myId;
       });
-      if (sorted[0]) winnerId = sorted[0].id;
+      if (myPlayer) myPlayer.hp = state.playerHp;
+
+      var winnerId = null;
+      if (iWon) {
+        winnerId = myId;
+      } else {
+        var sorted = allPlayers.slice().sort(function (a, b) {
+          return (b.hp || 0) - (a.hp || 0);
+        });
+        if (sorted[0]) winnerId = sorted[0].id;
+      }
+
+      GameAudio.stopBgm(true);
+      if (iWon) GameAudio.victory();
+      else GameAudio.defeat();
+
+      var wpm = calcWpm();
+      var acc = calcAcc();
+
+      setTimeout(function () {
+        UI.showResult({
+          victory: iWon,
+          wpm: wpm,
+          accuracy: acc,
+          maxCombo: state.maxCombo,
+          score: state.score,
+          mpWinner: winnerId,
+          mpPlayers: allPlayers,
+        });
+      }, 1000);
     }
 
-    GameAudio.stopBgm(true);
-    if (iWon) GameAudio.victory();
-    else GameAudio.defeat();
-
-    var wpm = calcWpm();
-    var acc = calcAcc();
-
-    setTimeout(function () {
-      UI.showResult({
-        victory: iWon,
-        wpm: wpm,
-        accuracy: acc,
-        maxCombo: state.maxCombo,
-        score: state.score,
-        mpWinner: winnerId,
-        mpPlayers: allPlayers,
-      });
-    }, 1000);
+    if (roomCode) {
+      var dbUrl = FIREBASE_URL + "/rooms/" + roomCode + "/players.json";
+      fetch(dbUrl, { cache: "no-store" })
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          var freshPlayers = data
+            ? Object.values(data)
+            : Multiplayer.getPlayers();
+          _showResult(freshPlayers);
+        })
+        .catch(function () {
+          _showResult(Multiplayer.getPlayers());
+        });
+    } else {
+      _showResult(Multiplayer.getPlayers());
+    }
   }
 
   function nextWord() {
