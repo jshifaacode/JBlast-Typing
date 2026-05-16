@@ -385,6 +385,460 @@ var Game = (function () {
     Multiplayer.broadcastGameOver(winnerId);
   }
 
+  function nextWord() {
+    state._botCompleted = false;
+    state._bots.forEach(clearInterval);
+    state._bots = [];
+    if (state._firstWord) {
+      state.currentWord = state._firstWord;
+      state.displayWord = state._firstWord;
+      state._firstWord = null;
+    } else {
+      var hasBoss = state.enemies.some(function (e) {
+        return e.isBoss;
+      });
+      if (hasBoss) {
+        var boss = state.enemies.find(function (e) {
+          return e.isBoss;
+        });
+        if (boss) {
+          state.currentWord =
+            boss.phase === 1 ? Words.getBoss() : Words.getHard();
+          state.displayWord = state.currentWord;
+        }
+      } else {
+        state.currentWord = Words.getByWave(state.wave);
+        state.displayWord = state.currentWord;
+      }
+    }
+    state.typedIndex = 0;
+    renderWord();
+    var inp = document.getElementById("gameInput");
+    if (inp) {
+      inp.value = "";
+      if (!isMobile())
+        setTimeout(function () {
+          inp.focus();
+        }, 50);
+    }
+    if (state.multiplayer) Multiplayer.startBotSimulation(state.currentWord);
+    else spawnBotOpponents();
+    updateMobileHL();
+  }
+
+  function renderWord() {
+    var el = document.getElementById("targetWord");
+    if (!el) return;
+    var panel = document.querySelector(".word-panel");
+    if (panel) {
+      panel.classList.remove(
+        "skin-fire",
+        "skin-lightning",
+        "skin-glitch",
+        "skin-ice",
+      );
+      if (state.skin && state.skin !== "default")
+        panel.classList.add("skin-" + state.skin);
+    }
+    el.innerHTML = state.displayWord
+      .split("")
+      .map(function (c, i) {
+        if (c === " ")
+          return '<span class="char" data-i="' + i + '">\u00a0</span>';
+        var cls = "char pending";
+        if (i < state.typedIndex) cls = "char correct";
+        else if (i === state.typedIndex) cls = "char active";
+        return '<span class="' + cls + '" data-i="' + i + '">' + c + "</span>";
+      })
+      .join("");
+  }
+
+  function handleInput(e) {
+    if (!state.running || state.paused) {
+      e.target.value = "";
+      return;
+    }
+    var input = e.target;
+    var typed = input.value;
+    var lastChar = typed[typed.length - 1];
+    if (!lastChar) {
+      state.typedIndex = 0;
+      renderWord();
+      return;
+    }
+    var expected = state.currentWord[state.typedIndex];
+    state.totalChars++;
+    if (lastChar === expected) {
+      state.correctChars++;
+      state.typedIndex++;
+      GameAudio.keyCorrect();
+      var ch = document.querySelector(
+        '[data-i="' + (state.typedIndex - 1) + '"]',
+      );
+      if (ch) {
+        ch.className = "char correct";
+        Effects.typeEffect(ch, state.skin);
+      }
+      if (state.typedIndex < state.displayWord.length) {
+        var nx = document.querySelector('[data-i="' + state.typedIndex + '"]');
+        if (nx) nx.className = "char active";
+      }
+      updateMobileHL();
+      if (state.multiplayer) {
+        Multiplayer.sendProgress(
+          state.typedIndex / state.currentWord.length,
+          calcWpm(),
+        );
+        if (state.typedIndex % 3 === 0) Multiplayer.sendTyping();
+      }
+      if (state.typedIndex >= state.currentWord.length)
+        setTimeout(onWordDone, 0);
+    } else {
+      state.wrongChars++;
+      state.combo = 0;
+      updateCombo();
+      state.playerHp = Math.max(0, state.playerHp - 2);
+      renderHpBars();
+      GameAudio.keyError();
+      Effects.screenShake(3, 120);
+      input.classList.add("wrong-char");
+      setTimeout(function () {
+        input.classList.remove("wrong-char");
+      }, 200);
+      var chw = document.querySelector('[data-i="' + state.typedIndex + '"]');
+      if (chw) {
+        chw.className = "char wrong";
+        setTimeout(function () {
+          if (chw.className === "char wrong") chw.className = "char active";
+        }, 280);
+      }
+      setTimeout(function () {
+        input.value = "";
+      }, 40);
+      if (state.multiplayer)
+        Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
+      if (state.playerHp <= 0) {
+        if (state.multiplayer) _handleMpDeath();
+        else endGame(false);
+        return;
+      }
+    }
+    updateStats();
+  }
+
+  function handleVirtualKey(key) {
+    if (!state.running || state.paused) return;
+    if (key === "BACK") {
+      if (state.typedIndex > 0) {
+        state.typedIndex--;
+        renderWord();
+      }
+      return;
+    }
+    var k = key === " " ? " " : key.toLowerCase();
+    var expected = state.currentWord[state.typedIndex];
+    state.totalChars++;
+    if (k === expected) {
+      state.correctChars++;
+      state.typedIndex++;
+      GameAudio.keyCorrect();
+      var ch = document.querySelector(
+        '[data-i="' + (state.typedIndex - 1) + '"]',
+      );
+      if (ch) {
+        ch.className = "char correct";
+        Effects.typeEffect(ch, state.skin);
+      }
+      if (state.typedIndex < state.displayWord.length) {
+        var nx = document.querySelector('[data-i="' + state.typedIndex + '"]');
+        if (nx) nx.className = "char active";
+      }
+      updateMobileHL();
+      if (state.multiplayer) {
+        Multiplayer.sendProgress(
+          state.typedIndex / state.currentWord.length,
+          calcWpm(),
+        );
+        if (state.typedIndex % 3 === 0) Multiplayer.sendTyping();
+      }
+      if (state.typedIndex >= state.currentWord.length)
+        setTimeout(onWordDone, 0);
+    } else {
+      state.wrongChars++;
+      state.combo = 0;
+      updateCombo();
+      state.playerHp = Math.max(0, state.playerHp - 2);
+      renderHpBars();
+      GameAudio.keyError();
+      Effects.screenShake(3, 100);
+      if (state.multiplayer)
+        Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
+      if (state.playerHp <= 0) {
+        if (state.multiplayer) _handleMpDeath();
+        else endGame(false);
+        return;
+      }
+    }
+    updateStats();
+  }
+
+  function onWordDone() {
+    if (!state.running) return;
+    state._bots.forEach(clearInterval);
+    state._bots = [];
+    state._botCompleted = true;
+    state.wordCount++;
+    state.combo++;
+    if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+    GameAudio.wordComplete();
+    Effects.comboEffect(state.combo);
+    GameAudio.comboUp(state.combo);
+    updateCombo();
+    if (state.wordCount % 3 === 0) unlockSkill();
+    var mult = state.skills.overdrive.active ? 2 : 1;
+    var comboDmg = Math.min(state.combo, 12) * 2;
+    var baseDmg = 20 + comboDmg;
+    var alive = state.enemies.filter(function (e) {
+      return e.hp > 0;
+    });
+    if (alive.length > 0) {
+      var target = alive[Math.floor(Math.random() * alive.length)];
+      dmgEnemy(target, Math.floor(baseDmg * mult));
+    }
+    state.score += (12 + comboDmg) * mult;
+    var healAmt = 6 + Math.min(state.combo - 1, 6) * 2;
+    var prevHp = state.playerHp;
+    state.playerHp = Math.min(state.maxPlayerHp, state.playerHp + healAmt);
+    if (state.playerHp !== prevHp) {
+      renderHpBars();
+      if (state.multiplayer)
+        Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
+    }
+    if (state.multiplayer) {
+      var myId = Multiplayer.getPlayerId();
+      var opponents = Multiplayer.getPlayers().filter(function (p) {
+        return p.id !== myId && (p.hp || 0) > 0;
+      });
+      if (opponents.length > 0) {
+        var oppDmg = Math.floor((18 + comboDmg) * mult);
+        opponents.forEach(function (opp) {
+          var newHp = Math.max(0, (opp.hp || 0) - oppDmg);
+          opp.hp = newHp;
+          Multiplayer.updatePlayerHp(opp.id, newHp);
+          Multiplayer.sendDamage(opp.id, oppDmg);
+        });
+        Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
+      }
+      setTimeout(function () {
+        _checkWinCondition();
+      }, 400);
+    }
+    if (
+      state.enemies.every(function (e) {
+        return e.hp <= 0;
+      })
+    ) {
+      onWaveClear();
+    } else {
+      setTimeout(nextWord, 180);
+    }
+  }
+
+  function dmgEnemy(e, amount) {
+    if (e.hp <= 0) return;
+    e.hp = Math.max(0, e.hp - amount);
+    var pct = (e.hp / e.maxHp) * 100;
+    var hpEl = document.getElementById("hp-" + e.id);
+    if (hpEl) {
+      hpEl.style.width = pct + "%";
+      if (pct < 30) hpEl.style.background = "var(--r)";
+      else if (pct < 60) hpEl.style.background = "var(--o)";
+      else hpEl.style.background = "";
+    }
+    var card = document.getElementById("enemy-" + e.id);
+    if (card) Effects.showDamageNumber(card, amount);
+    GameAudio.hit();
+    if (e.isBoss) {
+      if (e.hp < e.maxHp * 0.66 && e.phase === 1) {
+        e.phase = 2;
+        Effects.showToast("BOSS PHASE 2 — FASTER ATTACKS!", "warning");
+        e.attackDelay = e.attackDelay * 0.75;
+      }
+      if (e.hp < e.maxHp * 0.33 && e.phase === 2) {
+        e.phase = 3;
+        Effects.showToast("BOSS PHASE 3 — ALL OUT!", "warning");
+        e.attackDelay = e.attackDelay * 0.6;
+      }
+      var phEl = document.getElementById("phase-" + e.id);
+      if (phEl) phEl.textContent = "PHASE " + e.phase;
+    }
+    if (e.hp <= 0) {
+      var card2 = document.getElementById("enemy-" + e.id);
+      if (card2) {
+        Effects.killEffect(card2);
+        card2.style.opacity = "0";
+        card2.style.transform = "scale(0)";
+        card2.style.transition = "all .3s";
+        setTimeout(function () {
+          if (card2.parentElement) card2.remove();
+        }, 300);
+      }
+      clearTimeout(e.attackTimer);
+      if (e.burnTick) clearInterval(e.burnTick);
+    }
+    renderHpBars();
+  }
+
+  function onWaveClear() {
+    state.wave++;
+    state.score += 100 * (state.wave - 1);
+    Effects.showToast(
+      "WAVE " +
+        (state.wave - 1) +
+        " CLEAR! +" +
+        100 * (state.wave - 1) +
+        " SCORE",
+      "success",
+    );
+    GameAudio.victory();
+    state.enemies.forEach(function (e) {
+      clearTimeout(e.attackTimer);
+      if (e.burnTick) clearInterval(e.burnTick);
+    });
+    if (state.wave > 6) {
+      endGame(true);
+    } else {
+      Effects.showToast("WAVE " + state.wave + " INCOMING!", "warning", 1200);
+      setTimeout(spawnWave, 1600);
+    }
+  }
+
+  function unlockSkill() {
+    var skills = ["overdrive", "freeze", "burn"];
+    for (var i = 0; i < skills.length; i++) {
+      var sk = skills[i];
+      if (!state.skills[sk].active && state.skills[sk].cooldown === 0) {
+        var cap = sk.charAt(0).toUpperCase() + sk.slice(1);
+        var btn = document.getElementById("skill" + cap);
+        if (btn && btn.disabled) {
+          btn.disabled = false;
+          btn.classList.add("ready-glow");
+          Effects.showToast("SKILL READY: " + sk.toUpperCase(), "info");
+          break;
+        }
+      }
+    }
+  }
+
+  function activateSkill(name) {
+    var skill = state.skills[name];
+    if (!skill || skill.cooldown > 0 || !state.running) return;
+    var cap = name.charAt(0).toUpperCase() + name.slice(1);
+    var btn = document.getElementById("skill" + cap);
+    if (btn && btn.disabled) return;
+    if (name === "overdrive") {
+      skill.active = true;
+      document.body.classList.add("overdrive");
+      GameAudio.overdrive();
+      Effects.showToast("OVERDRIVE — DMG x2!", "warning");
+      setTimeout(function () {
+        skill.active = false;
+        document.body.classList.remove("overdrive");
+        setCooldown("overdrive", 20000);
+      }, 6000);
+    }
+    if (name === "freeze") {
+      state.enemies.forEach(function (e) {
+        e.frozen = true;
+        var c = document.getElementById("enemy-" + e.id);
+        if (c) c.classList.add("frozen");
+        setTimeout(function () {
+          e.frozen = false;
+          if (c) c.classList.remove("frozen");
+        }, 5000);
+      });
+      GameAudio.freeze();
+      Effects.showToast("ENEMIES FROZEN — 5 DETIK!", "info");
+      setCooldown("freeze", 18000);
+    }
+    if (name === "burn") {
+      state.enemies.forEach(function (e) {
+        if (e.hp <= 0) return;
+        e.burning = true;
+        var c = document.getElementById("enemy-" + e.id);
+        if (c) c.classList.add("burning");
+        var ticks = 0;
+        e.burnTick = setInterval(function () {
+          if (!state.running || e.hp <= 0 || ticks >= 10) {
+            clearInterval(e.burnTick);
+            e.burning = false;
+            if (c) c.classList.remove("burning");
+            return;
+          }
+          dmgEnemy(e, 9);
+          ticks++;
+        }, 500);
+      });
+      GameAudio.burn();
+      Effects.showToast("BURN — DOT DAMAGE!", "warning");
+      setCooldown("burn", 15000);
+    }
+    if (btn) btn.disabled = true;
+  }
+
+  function setCooldown(name, ms) {
+    state.skills[name].cooldown = ms;
+    var cap = name.charAt(0).toUpperCase() + name.slice(1);
+    var cdEl = document.getElementById("cd" + cap);
+    var btn = document.getElementById("skill" + cap);
+    if (!cdEl || !btn) return;
+    btn.disabled = true;
+    btn.classList.remove("ready-glow");
+    var start = Date.now();
+    var iv = setInterval(function () {
+      var el = Date.now() - start;
+      var pct = el / ms;
+      cdEl.style.transform = "scaleX(" + pct + ")";
+      state.skills[name].cooldown = ms - el;
+      if (el >= ms) {
+        clearInterval(iv);
+        state.skills[name].cooldown = 0;
+        cdEl.style.transform = "scaleX(0)";
+        btn.disabled = false;
+        btn.classList.add("ready-glow");
+        Effects.showToast(name.toUpperCase() + " READY!", "info");
+      }
+    }, 50);
+  }
+
+  function startTimers() {
+    clearInterval(state.timerInterval);
+    state.timerInterval = setInterval(function () {
+      if (!state.running || state.paused) return;
+      state.gameTimer++;
+      var m = Math.floor(state.gameTimer / 60)
+        .toString()
+        .padStart(2, "0");
+      var s = (state.gameTimer % 60).toString().padStart(2, "0");
+      var el = document.getElementById("gameTimer");
+      if (el) el.textContent = m + ":" + s;
+      if (state.multiplayer && state.mpTimeLimit > 0) {
+        var remaining = state.mpTimeLimit - state.gameTimer;
+        if (remaining <= 0) {
+          endMpByTime();
+          return;
+        }
+        var rm = Math.floor(remaining / 60)
+          .toString()
+          .padStart(2, "0");
+        var rs = (remaining % 60).toString().padStart(2, "0");
+        if (el) el.textContent = rm + ":" + rs;
+        if (remaining === 30) Effects.showToast("30 DETIK LAGI!", "warning");
+        if (remaining === 10) Effects.showToast("10 DETIK!", "warning");
+      }
+    }, 1000);
+  }
+
   function endMpByTime() {
     if (state._endingMp) return;
     var myId = Multiplayer.getPlayerId();
@@ -525,8 +979,10 @@ var Game = (function () {
     state.mpTimeLimit = MP_DURATION;
     state._eliminated = false;
     state._endingMp = false;
-    state._spectateInterval && clearInterval(state._spectateInterval);
-    state._spectateInterval = null;
+    if (state._spectateInterval) {
+      clearInterval(state._spectateInterval);
+      state._spectateInterval = null;
+    }
 
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "block";
@@ -540,8 +996,10 @@ var Game = (function () {
       if (state._endingMp) return;
       state._endingMp = true;
       clearInterval(state.winCheckInterval);
-      clearInterval(state._spectateInterval);
-      state._spectateInterval = null;
+      if (state._spectateInterval) {
+        clearInterval(state._spectateInterval);
+        state._spectateInterval = null;
+      }
       state.running = false;
       clearInterval(state.timerInterval);
       state.enemies.forEach(function (e) {
@@ -566,8 +1024,7 @@ var Game = (function () {
       if (iWon) GameAudio.victory();
       else GameAudio.defeat();
 
-      if (!iWon && !state._eliminated)
-        Effects.showToast("KAU KALAH!", "error", 2000);
+      if (!iWon) Effects.showToast("KAU KALAH!", "error", 2000);
 
       setTimeout(function () {
         UI.showResult({
