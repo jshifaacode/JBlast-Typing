@@ -449,6 +449,7 @@ var App = (function () {
       var btnCreate = document.getElementById("btnCreateRoom");
       btnCreate.disabled = true;
       btnCreate.textContent = "CREATING...";
+      _mpListenersReady = false;
       _setupMpListeners();
       Multiplayer.createRoom({
         id: p.id,
@@ -490,6 +491,7 @@ var App = (function () {
       var btnJoin = document.getElementById("btnJoinRoom");
       btnJoin.disabled = true;
       btnJoin.textContent = "JOINING...";
+      _mpListenersReady = false;
       _setupMpListeners();
       Multiplayer.joinRoom(code, {
         id: p.id,
