@@ -10,7 +10,8 @@ var Multiplayer = (function () {
     _bots = [],
     _poll = null,
     _lastSnap = "",
-    _lastStatus = "";
+    _lastStatus = "",
+    _lastGameOver = "";
   var _rematchStarted = false;
   var _doingRematch = false;
   var PLAYER_MAX_HP = 200;
@@ -122,8 +123,10 @@ var Multiplayer = (function () {
   }
 
   function _handleRematchVotes(votes) {
+    if (!votes || typeof votes !== "object") return;
     var playerIds = Object.keys(players);
     var totalPlayers = playerIds.length;
+    if (totalPlayers < MIN_PLAYERS) return;
     var totalAccept = playerIds.filter(function (k) {
       return votes[k] === true;
     }).length;
@@ -139,13 +142,18 @@ var Multiplayer = (function () {
     if (hasDecline) return;
     if (
       isHost &&
-      totalPlayers >= MIN_PLAYERS &&
       totalAccept >= totalPlayers &&
       !_rematchStarted &&
       !_doingRematch
     ) {
       _doRematch();
     }
+  }
+
+  function broadcastGameOver(winnerId) {
+    if (!room) return Promise.resolve();
+    var key = winnerId || "none";
+    return dbUpd("rooms/" + room, { gameOver: key, gameOverAt: Date.now() });
   }
 
   function startPoll(code) {
@@ -164,18 +172,18 @@ var Multiplayer = (function () {
           players = r.players || {};
           emit("players_update", { players: Object.values(players) });
           _updateLobby();
-          Object.keys(players).forEach(function (pid2) {
-            var p = players[pid2];
-            var old = oldPlayers[pid2];
+          Object.keys(players).forEach(function (id2) {
+            var p = players[id2];
+            var old = oldPlayers[id2];
             if (!old || old.hp !== p.hp) {
               emit("hp_update", {
-                playerId: pid2,
+                playerId: id2,
                 hp: p.hp !== undefined ? p.hp : PLAYER_MAX_HP,
               });
             }
             if (!old || old.progress !== p.progress || old.wpm !== p.wpm) {
               emit("player_progress", {
-                playerId: pid2,
+                playerId: id2,
                 progress: p.progress || 0,
                 wpm: p.wpm || 0,
               });
@@ -183,8 +191,17 @@ var Multiplayer = (function () {
           });
         }
 
-        var status = r.status || "lobby";
+        var goKey = r.gameOver || "";
+        if (goKey && goKey !== _lastGameOver) {
+          _lastGameOver = goKey;
+          var winnerId2 = goKey === "none" ? null : goKey;
+          var allPl2 = r.players
+            ? Object.values(r.players)
+            : Object.values(players);
+          emit("game_over_broadcast", { winnerId: winnerId2, players: allPl2 });
+        }
 
+        var status = r.status || "lobby";
         if (!isHost && status === "playing" && _lastStatus !== "playing") {
           _lastStatus = "playing";
           if (r.currentWord) {
@@ -214,7 +231,6 @@ var Multiplayer = (function () {
         var hasDeclinePoll = Object.keys(players).some(function (k) {
           return rv[k] === false;
         });
-
         if (totalPl >= MIN_PLAYERS && (totalV > 0 || hasDeclinePoll)) {
           emit("rematch_votes_update", {
             votes: totalV,
@@ -259,6 +275,7 @@ var Multiplayer = (function () {
     _doingRematch = false;
     _lastStatus = "";
     _lastSnap = "";
+    _lastGameOver = "";
     var code = genCode();
     room = code;
     var data = {
@@ -269,6 +286,7 @@ var Multiplayer = (function () {
       players: {},
       currentWord: "",
       rematchWord: "",
+      gameOver: "",
       events: {},
       rematchVotes: {},
     };
@@ -322,6 +340,7 @@ var Multiplayer = (function () {
       _doingRematch = false;
       _lastStatus = "";
       _lastSnap = "";
+      _lastGameOver = "";
       return dbSet("rooms/" + code + "/players/" + pid, _entry(p))
         .then(function () {
           return dbGet("rooms/" + code + "/players");
@@ -398,9 +417,23 @@ var Multiplayer = (function () {
       }
     });
 
+    listen("rooms/" + code + "/gameOver", function (data) {
+      if (data && data !== "" && _lastGameOver !== data) {
+        _lastGameOver = data;
+        var winnerId2 = data === "none" ? null : data;
+        dbGet("rooms/" + code + "/players").then(function (latestPlayers) {
+          var allPl = latestPlayers
+            ? Object.values(latestPlayers)
+            : Object.values(players);
+          emit("game_over_broadcast", { winnerId: winnerId2, players: allPl });
+        });
+      }
+    });
+
     listen("rooms/" + code + "/rematchWord", function (data) {
       if (data && data !== "" && _lastStatus !== "rematch_" + data) {
         _lastStatus = "rematch_" + data;
+        _lastGameOver = "";
         _doingRematch = false;
         _rematchStarted = false;
         dbGet("rooms/" + code + "/players").then(function (latestPlayers) {
@@ -449,8 +482,7 @@ var Multiplayer = (function () {
           '</div><div class="lpc-name bb">' +
           p.name +
           (isMe ? " (YOU)" : "") +
-          '</div><div class="lpc-status" style="color:var(--g)">READY</div>' +
-          "</div>"
+          '</div><div class="lpc-status" style="color:var(--g)">READY</div></div>'
         );
       })
       .join("");
@@ -495,10 +527,12 @@ var Multiplayer = (function () {
     _doingRematch = false;
     var word = Words.getByWave(1);
     _lastStatus = "playing";
+    _lastGameOver = "";
     return dbUpd("rooms/" + room, {
       status: "playing",
       currentWord: word,
       rematchWord: "",
+      gameOver: "",
       rematchVotes: null,
       startedAt: Date.now(),
     }).then(function () {
@@ -519,6 +553,7 @@ var Multiplayer = (function () {
       status: "playing",
       currentWord: word,
       rematchWord: word,
+      gameOver: "",
       rematchVotes: null,
       startedAt: Date.now(),
     };
@@ -535,6 +570,7 @@ var Multiplayer = (function () {
         }
       });
       _lastStatus = "rematch_" + word;
+      _lastGameOver = "";
       return dbUpd("rooms/" + room, updates).then(function () {
         _doingRematch = false;
         emit("rematch_start", { word: word, players: Object.values(players) });
@@ -602,6 +638,7 @@ var Multiplayer = (function () {
     isHost = false;
     _lastStatus = "";
     _lastSnap = "";
+    _lastGameOver = "";
     _rematchStarted = false;
     _doingRematch = false;
     return Promise.resolve();
@@ -686,6 +723,7 @@ var Multiplayer = (function () {
     sendTyping,
     sendDamage,
     updatePlayerHp,
+    broadcastGameOver,
     leaveRoom,
     getPlayers,
     getPlayer,
