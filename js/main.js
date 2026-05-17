@@ -179,6 +179,11 @@ var App = (function () {
   function _setupMpListeners() {
     if (_mpListenersReady) return;
     _mpListenersReady = true;
+    Multiplayer.on("players_update", function (data) {
+      var code = Multiplayer.getCurrentRoom();
+      var host = Multiplayer.getIsHost();
+      if (code) buildLobby(data.players, host, code);
+    });
     Multiplayer.on("game_start", function (data) {
       if (_leavingGame) return;
       startMpGame(data.word);
@@ -471,9 +476,6 @@ var App = (function () {
         buildLobby(r.players, true, r.roomCode);
         UI.showScreen("screen-lobby");
         Effects.showToast("Room dibuat! Share kode ke teman.", "success");
-        Multiplayer.on("players_update", function (data) {
-          buildLobby(data.players, true, r.roomCode);
-        });
       });
     });
 
@@ -513,9 +515,6 @@ var App = (function () {
           "Joined " + r.roomCode + "! Tunggu host start.",
           "success",
         );
-        Multiplayer.on("players_update", function (data) {
-          buildLobby(data.players, false, r.roomCode);
-        });
       });
     });
 
@@ -549,11 +548,7 @@ var App = (function () {
         );
         return;
       }
-      Multiplayer.startGame().then(function () {
-        var word = null;
-        var players = Multiplayer.getPlayers();
-        startMpGame(word);
-      });
+      Multiplayer.startGame();
     });
 
     addTap("btnLeaveLobby", function () {

@@ -342,7 +342,6 @@ var Game = (function () {
     state._eliminated = true;
     state.running = false;
     clearInterval(state.timerInterval);
-    clearInterval(state.winCheckInterval);
     state.enemies.forEach(function (e) {
       clearTimeout(e.attackTimer);
       if (e.burnTick) clearInterval(e.burnTick);
@@ -366,16 +365,7 @@ var Game = (function () {
       wordPanel.style.pointerEvents = "none";
     }
     var myId = Multiplayer.getPlayerId();
-    Multiplayer.updatePlayerHp(myId, 0).then(function () {
-      var allPl = Multiplayer.getPlayers();
-      var alive = allPl.filter(function (p) {
-        return (p.hp || 0) > 0;
-      });
-      if (alive.length <= 1) {
-        var wId = alive.length === 1 ? alive[0].id : null;
-        Multiplayer.broadcastGameOver(wId);
-      }
-    });
+    Multiplayer.updatePlayerHp(myId, 0);
   }
 
   function _finishMp(iWon) {
