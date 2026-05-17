@@ -540,8 +540,7 @@ var App = (function () {
     });
 
     addTap("btnStartMatch", function () {
-      var playerCount = Multiplayer.getPlayers().length;
-      if (playerCount < Multiplayer.getMinPlayers()) {
+      if (Multiplayer.getPlayers().length < Multiplayer.getMinPlayers()) {
         Effects.showToast(
           "Butuh minimal " + Multiplayer.getMinPlayers() + " pemain!",
           "error",

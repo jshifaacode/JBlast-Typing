@@ -470,6 +470,7 @@ var Multiplayer = (function () {
       var canStart = playerList.length >= MIN_PLAYERS;
       startBtn.disabled = !canStart;
       startBtn.style.opacity = canStart ? "1" : "0.4";
+      startBtn.style.display = "block";
     }
   }
 
