@@ -8,12 +8,12 @@ var Multiplayer = (function () {
     cbs = {};
   var _ls = [],
     _bots = [],
-    _poll = null,
-    _lastSnap = "",
-    _lastStatus = "";
+    _poll = null;
   var _rematchStarted = false;
   var _doingRematch = false;
   var _lastGameOver = "";
+  var _lastStatus = "";
+  var _lastRematchWord = "";
   var PLAYER_MAX_HP = 200;
   var MAX_PLAYERS = 4;
   var MIN_PLAYERS = 2;
@@ -32,6 +32,7 @@ var Multiplayer = (function () {
   function on(ev, cb) {
     cbs[ev] = cb;
   }
+
   function emit(ev, d) {
     if (cbs[ev]) cbs[ev](d);
   }
@@ -73,27 +74,6 @@ var Multiplayer = (function () {
     return fetch(FIREBASE_URL + "/" + path + ".json", {
       method: "DELETE",
     }).catch(function () {});
-  }
-
-  function listen(path, cb) {
-    if (typeof EventSource === "undefined") return;
-    try {
-      var es = new EventSource(FIREBASE_URL + "/" + path + ".json");
-      es.addEventListener("put", function (e) {
-        try {
-          var d = JSON.parse(e.data);
-          cb(d.data, d.path || "/");
-        } catch (x) {}
-      });
-      es.addEventListener("patch", function (e) {
-        try {
-          var d = JSON.parse(e.data);
-          cb(d.data, d.path || "/");
-        } catch (x) {}
-      });
-      es.onerror = function () {};
-      _ls.push(es);
-    } catch (x) {}
   }
 
   function stopListeners() {
@@ -153,7 +133,6 @@ var Multiplayer = (function () {
       _poll = null;
     }
     var _pollSnap = "";
-    var _pollGameOver = "";
     _poll = setInterval(function () {
       dbGet("rooms/" + code).then(function (r) {
         if (!r) return;
@@ -179,21 +158,19 @@ var Multiplayer = (function () {
         }
 
         var goVal = r.gameOver || "";
-        if (goVal !== "" && goVal !== _pollGameOver) {
-          _pollGameOver = goVal;
-          if (goVal !== _lastGameOver) {
-            _lastGameOver = goVal;
-            var goWin = goVal === "none" ? null : goVal;
-            var goPl = r.players
-              ? Object.values(r.players)
-              : Object.values(players);
-            emit("game_over", { winnerId: goWin, players: goPl });
-          }
+        if (goVal !== "" && goVal !== _lastGameOver) {
+          _lastGameOver = goVal;
+          var goWin = goVal === "none" ? null : goVal;
+          var goPl = r.players
+            ? Object.values(r.players)
+            : Object.values(players);
+          emit("game_over", { winnerId: goWin, players: goPl });
         }
 
         var rematchWord = r.rematchWord || "";
-        if (rematchWord !== "" && _lastStatus !== "rematch_" + rematchWord) {
-          _lastStatus = "rematch_" + rematchWord;
+        if (rematchWord !== "" && rematchWord !== _lastRematchWord) {
+          _lastRematchWord = rematchWord;
+          _lastStatus = "playing";
           _doingRematch = false;
           _rematchStarted = false;
           emit("rematch_start", {
@@ -209,7 +186,7 @@ var Multiplayer = (function () {
           _handleRematchVotes(rv);
         }
       });
-    }, 900);
+    }, 800);
   }
 
   function _entry(p) {
@@ -234,8 +211,8 @@ var Multiplayer = (function () {
     _rematchStarted = false;
     _doingRematch = false;
     _lastStatus = "";
-    _lastSnap = "";
     _lastGameOver = "";
+    _lastRematchWord = "";
     var code = genCode();
     room = code;
     var data = {
@@ -254,7 +231,6 @@ var Multiplayer = (function () {
     return dbSet("rooms/" + code, data).then(function () {
       players = {};
       players[pid] = _entry(p);
-      _listenRoom(code);
       startPoll(code);
       window.addEventListener("beforeunload", function () {
         try {
@@ -299,15 +275,14 @@ var Multiplayer = (function () {
       _rematchStarted = false;
       _doingRematch = false;
       _lastStatus = "";
-      _lastSnap = "";
       _lastGameOver = "";
+      _lastRematchWord = "";
       return dbSet("rooms/" + code + "/players/" + pid, _entry(p))
         .then(function () {
           return dbGet("rooms/" + code + "/players");
         })
         .then(function (all) {
           players = all || {};
-          _listenRoom(code);
           startPoll(code);
           window.addEventListener("beforeunload", function () {
             try {
@@ -325,116 +300,6 @@ var Multiplayer = (function () {
           return { roomCode: code, players: Object.values(players) };
         });
     });
-  }
-
-  function _listenRoom(code) {
-    listen("rooms/" + code + "/players", function (data, path) {
-      if (!data && path === "/") return;
-      if (path === "/" || path === "") {
-        if (data && typeof data === "object") {
-          players = data;
-          _lastSnap = JSON.stringify(players);
-          emit("players_update", { players: Object.values(players) });
-          _updateLobby();
-        }
-      } else {
-        var parts = path.replace(/^\//, "").split("/");
-        var p2 = parts[0];
-        if (!p2) return;
-        if (data === null) {
-          delete players[p2];
-        } else if (typeof data === "object") {
-          players[p2] = Object.assign({}, players[p2] || {}, data);
-        } else if (parts.length > 1) {
-          if (!players[p2]) players[p2] = {};
-          players[p2][parts[1]] = data;
-        }
-        _lastSnap = JSON.stringify(players);
-        emit("players_update", { players: Object.values(players) });
-        emit("player_progress", {
-          playerId: p2,
-          progress: (players[p2] && players[p2].progress) || 0,
-          wpm: (players[p2] && players[p2].wpm) || 0,
-        });
-        emit("hp_update", {
-          playerId: p2,
-          hp:
-            players[p2] && players[p2].hp !== undefined
-              ? players[p2].hp
-              : PLAYER_MAX_HP,
-        });
-        _updateLobby();
-      }
-    });
-
-    listen("rooms/" + code + "/status", function (data) {
-      if (data === "playing" && !isHost && _lastStatus !== "playing") {
-        _lastStatus = "playing";
-        dbGet("rooms/" + code + "/currentWord").then(function (w) {
-          if (w)
-            emit("game_start", { word: w, players: Object.values(players) });
-        });
-      }
-    });
-
-    listen("rooms/" + code + "/gameOver", function (data) {
-      if (data && data !== "" && _lastGameOver !== data) {
-        _lastGameOver = data;
-        var goWin2 = data === "none" ? null : data;
-        dbGet("rooms/" + code + "/players").then(function (pl) {
-          var goPl2 = pl ? Object.values(pl) : Object.values(players);
-          emit("game_over", { winnerId: goWin2, players: goPl2 });
-        });
-      }
-    });
-
-    listen("rooms/" + code + "/rematchWord", function (data) {
-      if (data && data !== "" && _lastStatus !== "rematch_" + data) {
-        _lastStatus = "rematch_" + data;
-        _doingRematch = false;
-        _rematchStarted = false;
-        dbGet("rooms/" + code + "/players").then(function (latestPlayers) {
-          if (latestPlayers) {
-            players = latestPlayers;
-            _lastSnap = JSON.stringify(players);
-          }
-          emit("rematch_start", {
-            word: data,
-            players: Object.values(players),
-          });
-        });
-      }
-    });
-
-    listen("rooms/" + code + "/events", function (data, path) {
-      if (!data || path === "/" || path === "") return;
-      if (typeof data === "object" && data.type && data.from !== pid)
-        _handleEv(data);
-    });
-
-    listen("rooms/" + code + "/rematchVotes", function (data, path) {
-      if (path === "/" || path === "") {
-        _handleRematchVotes(data || {});
-      } else {
-        var rv = {};
-        Object.keys(players).forEach(function (k) {
-          var el = document.getElementById("vote-" + k);
-          if (el) rv[k] = players[k] && players[k]._vote;
-        });
-        dbGet("rooms/" + code + "/rematchVotes").then(function (fresh) {
-          _handleRematchVotes(fresh || {});
-        });
-      }
-    });
-  }
-
-  function _handleEv(ev) {
-    if (ev.type === "typing")
-      emit("player_typing", { playerId: ev.from, name: ev.name });
-    if (ev.type === "word_complete")
-      emit("player_word_complete", { playerId: ev.from, wpm: ev.wpm });
-    if (ev.type === "damage")
-      emit("damage_dealt", { from: ev.from, to: ev.to, amount: ev.amount });
   }
 
   function _updateLobby() {
@@ -460,11 +325,15 @@ var Multiplayer = (function () {
       st.textContent =
         playerList.length + "/" + MAX_PLAYERS + " PILOT(S) IN LOBBY";
     var startBtn = document.getElementById("btnStartMatch");
-    if (startBtn && isHost) {
-      var canStart = playerList.length >= MIN_PLAYERS;
-      startBtn.disabled = !canStart;
-      startBtn.style.opacity = canStart ? "1" : "0.4";
-      startBtn.style.display = "block";
+    if (startBtn) {
+      if (isHost) {
+        var canStart = playerList.length >= MIN_PLAYERS;
+        startBtn.disabled = !canStart;
+        startBtn.style.opacity = canStart ? "1" : "0.4";
+        startBtn.style.display = "block";
+      } else {
+        startBtn.style.display = "none";
+      }
     }
   }
 
@@ -496,6 +365,7 @@ var Multiplayer = (function () {
     _rematchStarted = false;
     _doingRematch = false;
     _lastGameOver = "";
+    _lastRematchWord = "";
     var word = Words.getByWave(1);
     _lastStatus = "playing";
 
@@ -552,8 +422,9 @@ var Multiplayer = (function () {
           players[id].progress = 0;
         }
       });
-      _lastStatus = "rematch_" + word;
+      _lastStatus = "playing";
       _lastGameOver = "";
+      _lastRematchWord = word;
       return dbUpd("rooms/" + room, updates).then(function () {
         _doingRematch = false;
         emit("rematch_start", { word: word, players: Object.values(players) });
@@ -628,8 +499,8 @@ var Multiplayer = (function () {
     players = {};
     isHost = false;
     _lastStatus = "";
-    _lastSnap = "";
     _lastGameOver = "";
+    _lastRematchWord = "";
     _rematchStarted = false;
     _doingRematch = false;
     return Promise.resolve();
@@ -672,30 +543,39 @@ var Multiplayer = (function () {
     _bots.forEach(clearInterval);
     _bots = [];
   }
+
   function getPlayers() {
     return Object.values(players);
   }
+
   function getPlayer() {
     return players[pid];
   }
+
   function getCurrentRoom() {
     return room;
   }
+
   function getIsHost() {
     return isHost;
   }
+
   function getPlayerId() {
     return pid;
   }
+
   function generatePlayerId() {
     return genId();
   }
+
   function getMinPlayers() {
     return MIN_PLAYERS;
   }
+
   function getMaxPlayers() {
     return MAX_PLAYERS;
   }
+
   function getRenderAvatar() {
     return _renderAvatar;
   }

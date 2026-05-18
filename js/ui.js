@@ -295,17 +295,18 @@ var UI = (function () {
             );
           })
           .join("");
+
         mpEl.innerHTML =
           '<div class="rank-box"><div class="rank-box-ttl bb">BATTLE RANKING</div>' +
           rows +
           "</div>" +
           '<div class="rematch-vote-box" id="rematchVoteBox">' +
           '<div class="rematch-vote-lbl bb">MAIN LAGI?</div>' +
-          '<div class="rematch-vote-btns">' +
-          '<button class="btn bb" id="btnVoteAccept"><i class="fa-solid fa-check"></i> ACCEPT</button>' +
-          '<button class="btn btn-red bb" id="btnVoteDecline"><i class="fa-solid fa-xmark"></i> DECLINE</button>' +
+          '<div class="rematch-vote-btns" id="rematchVoteBtns">' +
+          '<button class="btn bb" id="btnVoteAccept" style="min-width:120px;padding:14px 20px;font-size:15px;touch-action:manipulation;"><i class="fa-solid fa-check"></i> ACCEPT</button>' +
+          '<button class="btn btn-red bb" id="btnVoteDecline" style="min-width:120px;padding:14px 20px;font-size:15px;touch-action:manipulation;"><i class="fa-solid fa-xmark"></i> DECLINE</button>' +
           "</div>" +
-          '<div class="rematch-vote-status bb" id="rematchVoteStatus">Menunggu vote...</div>' +
+          '<div class="rematch-vote-status bb" id="rematchVoteStatus">Pilih Accept atau Decline</div>' +
           "</div>";
       } else {
         mpEl.innerHTML = "";
@@ -327,8 +328,7 @@ var UI = (function () {
 
   function updateVoteDisplay(votes, players, myId) {
     var statusEl = document.getElementById("rematchVoteStatus");
-    var voteBox = document.getElementById("rematchVoteBox");
-    if (!statusEl || !voteBox) return;
+    if (!statusEl) return;
 
     var total = players.length;
     var acceptCount = players.filter(function (p) {
@@ -338,24 +338,10 @@ var UI = (function () {
       return votes[p.id] === false;
     }).length;
 
-    players.forEach(function (p) {
-      var el = document.getElementById("vote-" + p.id);
-      if (!el) return;
-      if (votes[p.id] === true) {
-        el.innerHTML =
-          '<span style="color:var(--g);font-size:11px;font-weight:bold;">&#10003; ACCEPT</span>';
-      } else if (votes[p.id] === false) {
-        el.innerHTML =
-          '<span style="color:var(--r);font-size:11px;font-weight:bold;">&#10007; DECLINE</span>';
-      } else {
-        el.innerHTML =
-          '<span style="color:var(--t3);font-size:11px;">menunggu...</span>';
-      }
-    });
-
     var myVote = votes[myId];
     var acceptBtn = document.getElementById("btnVoteAccept");
     var declineBtn = document.getElementById("btnVoteDecline");
+
     if (myVote !== undefined) {
       if (acceptBtn) {
         acceptBtn.disabled = true;
@@ -364,15 +350,6 @@ var UI = (function () {
       if (declineBtn) {
         declineBtn.disabled = true;
         declineBtn.style.opacity = myVote === false ? "1" : "0.4";
-      }
-    } else {
-      if (acceptBtn) {
-        acceptBtn.disabled = false;
-        acceptBtn.style.opacity = "1";
-      }
-      if (declineBtn) {
-        declineBtn.disabled = false;
-        declineBtn.style.opacity = "1";
       }
     }
 
@@ -408,17 +385,21 @@ function buildMobileKeyboard() {
     .map(function (row, ri) {
       var back =
         ri === 2
-          ? '<button class="key-btn key-back bb" data-key="BACK">&#8592;</button>'
+          ? '<button class="key-btn key-back bb" data-key="BACK" style="touch-action:manipulation;">&#8592;</button>'
           : "";
       var space =
         ri === 2
-          ? '<button class="key-btn key-space bb" data-key=" ">SPC</button>'
+          ? '<button class="key-btn key-space bb" data-key=" " style="touch-action:manipulation;">SPC</button>'
           : "";
       var keys = row
         .split("")
         .map(function (c) {
           return (
-            '<button class="key-btn bb" data-key="' + c + '">' + c + "</button>"
+            '<button class="key-btn bb" data-key="' +
+            c +
+            '" style="touch-action:manipulation;">' +
+            c +
+            "</button>"
           );
         })
         .join("");

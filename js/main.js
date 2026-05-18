@@ -190,28 +190,25 @@ var App = (function () {
   function _setupMpListeners() {
     if (_mpListenersReady) return;
     _mpListenersReady = true;
+
     Multiplayer.on("players_update", function (data) {
       var code = Multiplayer.getCurrentRoom();
       var host = Multiplayer.getIsHost();
       if (code) buildLobby(data.players, host, code);
     });
+
     Multiplayer.on("game_start", function (data) {
       if (_leavingGame) return;
       startMpGame(data.word);
     });
+
     Multiplayer.on("rematch_start", function (data) {
       if (_leavingGame) return;
       _updateRematchStatus(0, 0);
       _mpReady = true;
-      var btnPlay = document.getElementById("btnPlayAgain");
-      if (btnPlay) {
-        btnPlay.disabled = false;
-        btnPlay.textContent = "MAIN LAGI";
-      }
-      var rsEl = document.getElementById("rematchStatus");
-      if (rsEl) rsEl.style.display = "none";
       startMpGame(data.word);
     });
+
     Multiplayer.on("rematch_votes_update", function (data) {
       _updateRematchStatus(data.votes, data.total);
       var players = Multiplayer.getPlayers();
@@ -230,6 +227,7 @@ var App = (function () {
         }, 1800);
       }
     });
+
     Multiplayer.on("kicked", function () {
       _mpReady = false;
       _leavingGame = true;
@@ -271,7 +269,15 @@ var App = (function () {
     var grid = document.getElementById("lobbyPlayers");
     if (lobbyCode) lobbyCode.textContent = roomCode;
     if (btnStart) {
-      btnStart.style.display = isHost ? "block" : "none";
+      if (isHost) {
+        btnStart.style.display = "block";
+        var canStart = players.length >= Multiplayer.getMinPlayers();
+        btnStart.disabled = !canStart;
+        btnStart.style.opacity = canStart ? "1" : "0.4";
+        btnStart.style.pointerEvents = canStart ? "auto" : "none";
+      } else {
+        btnStart.style.display = "none";
+      }
     }
     if (lobbyStatus)
       lobbyStatus.textContent =
@@ -298,11 +304,6 @@ var App = (function () {
           );
         })
         .join("");
-    }
-    if (isHost && btnStart) {
-      var canStart = players.length >= Multiplayer.getMinPlayers();
-      btnStart.disabled = !canStart;
-      btnStart.style.opacity = canStart ? "1" : "0.4";
     }
   }
 
@@ -354,6 +355,30 @@ var App = (function () {
     setTimeout(function () {
       _leaveMpAndGoMenu();
     }, 1200);
+  }
+
+  function _doStartMatch() {
+    if (!Multiplayer.getIsHost()) return;
+    var btn = document.getElementById("btnStartMatch");
+    if (!btn) return;
+    var playerCount = Multiplayer.getPlayers().length;
+    if (playerCount < Multiplayer.getMinPlayers()) {
+      Effects.showToast(
+        "Butuh minimal " + Multiplayer.getMinPlayers() + " pemain!",
+        "error",
+      );
+      return;
+    }
+    if (btn.disabled) return;
+    GameAudio.keyPress();
+    btn.disabled = true;
+    btn.style.pointerEvents = "none";
+    btn.textContent = "STARTING...";
+    Multiplayer.startGame().then(function () {
+      btn.disabled = false;
+      btn.style.pointerEvents = "auto";
+      btn.textContent = "► START MATCH";
+    });
   }
 
   function bindEvents() {
@@ -588,40 +613,23 @@ var App = (function () {
       Effects.showToast("Kode disalin: " + code, "success");
     });
 
-    function _doStartMatch() {
-      var btn = document.getElementById("btnStartMatch");
-      if (!btn || btn.disabled) return;
-      var playerCount = Multiplayer.getPlayers().length;
-      if (playerCount < Multiplayer.getMinPlayers()) {
-        Effects.showToast(
-          "Butuh minimal " + Multiplayer.getMinPlayers() + " pemain!",
-          "error",
-        );
-        return;
-      }
-      GameAudio.keyPress();
-      btn.disabled = true;
-      btn.textContent = "STARTING...";
-      Multiplayer.startGame().then(function () {
-        btn.disabled = false;
-        btn.textContent = "► START MATCH";
+    var startMatchBtn = document.getElementById("btnStartMatch");
+    if (startMatchBtn) {
+      startMatchBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        _doStartMatch();
       });
-    }
-
-    document.addEventListener("click", function (e) {
-      if (e.target.closest("#btnStartMatch")) _doStartMatch();
-    });
-
-    document.addEventListener(
-      "touchend",
-      function (e) {
-        if (e.target.closest("#btnStartMatch")) {
+      startMatchBtn.addEventListener(
+        "touchend",
+        function (e) {
           e.preventDefault();
+          e.stopPropagation();
+          GameAudio.unlock();
           _doStartMatch();
-        }
-      },
-      { passive: false },
-    );
+        },
+        { passive: false },
+      );
+    }
 
     addTap("btnLeaveLobby", function () {
       _mpReady = false;
@@ -710,24 +718,7 @@ var App = (function () {
     addTap("btnPlayAgain", function () {
       var st = Game.getState();
       if (st.mode === "multiplayer" && _mpReady) {
-        var rsEl = document.getElementById("rematchStatus");
-        if (rsEl) {
-          rsEl.style.display = "block";
-          rsEl.textContent = "Voting rematch...";
-        }
-        var btnPlay = document.getElementById("btnPlayAgain");
-        if (btnPlay) {
-          btnPlay.disabled = true;
-          btnPlay.textContent = "MENUNGGU...";
-        }
-        Multiplayer.voteRematch(true);
-        var statusEl = document.getElementById("rematchVoteStatus");
-        if (statusEl)
-          statusEl.textContent = "Kamu ACCEPT — menunggu lainnya...";
-        var ab = document.getElementById("btnVoteAccept");
-        var db = document.getElementById("btnVoteDecline");
-        if (ab) ab.disabled = true;
-        if (db) db.disabled = true;
+        return;
       } else {
         if (!GameAudio.isMuted() && !GameAudio.isPlaying()) {
           _bgmStarted = true;
@@ -743,11 +734,6 @@ var App = (function () {
       if (inp) inp.blur();
       var rsEl = document.getElementById("rematchStatus");
       if (rsEl) rsEl.style.display = "none";
-      var btnPlay = document.getElementById("btnPlayAgain");
-      if (btnPlay) {
-        btnPlay.disabled = false;
-        btnPlay.textContent = "MAIN LAGI";
-      }
       var st = Game.getState();
       if (st.mode === "multiplayer" && _mpReady) {
         _leaveMpAndGoMenu();

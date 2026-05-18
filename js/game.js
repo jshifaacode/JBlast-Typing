@@ -33,8 +33,8 @@ var Game = (function () {
     wordCount: 0,
     mpTimeLimit: 0,
     _eliminated: false,
-    _spectateInterval: null,
     _endingMp: false,
+    _gameOverHandled: false,
   };
 
   var PLAYER_MAX_HP = 200;
@@ -108,10 +108,9 @@ var Game = (function () {
     state.mpTimeLimit = 0;
     state._eliminated = false;
     state._endingMp = false;
+    state._gameOverHandled = false;
     clearInterval(state.timerInterval);
     clearInterval(state.winCheckInterval);
-    clearInterval(state._spectateInterval);
-    state._spectateInterval = null;
 
     ["Overdrive", "Freeze", "Burn"].forEach(function (sk) {
       var btn = document.getElementById("skill" + sk);
@@ -334,6 +333,7 @@ var Game = (function () {
     if (state._eliminated) return;
     state._eliminated = true;
     state.running = false;
+
     clearInterval(state.timerInterval);
     state.enemies.forEach(function (e) {
       clearTimeout(e.attackTimer);
@@ -363,18 +363,19 @@ var Game = (function () {
     Multiplayer.updatePlayerHp(myId, 0).then(function () {
       setTimeout(function () {
         _checkAndBroadcastWinner();
-      }, 600);
+      }, 800);
     });
   }
 
   function _checkAndBroadcastWinner() {
-    if (state._endingMp) return;
+    if (state._gameOverHandled) return;
     var allPl = Multiplayer.getPlayers();
     if (allPl.length < 2) return;
     var alive = allPl.filter(function (p) {
       return (p.hp || 0) > 0;
     });
     if (alive.length <= 1) {
+      state._gameOverHandled = true;
       var wId = alive.length === 1 ? alive[0].id : null;
       Multiplayer.broadcastGameOver(wId);
     }
@@ -383,9 +384,8 @@ var Game = (function () {
   function _finishMp(iWon, winnerId, allPlayers) {
     if (state._endingMp) return;
     state._endingMp = true;
+    state._gameOverHandled = true;
 
-    clearInterval(state._spectateInterval);
-    state._spectateInterval = null;
     clearInterval(state.winCheckInterval);
     clearInterval(state.timerInterval);
     state.running = false;
@@ -401,7 +401,7 @@ var Game = (function () {
     var me = allPlayers.find(function (p) {
       return p.id === myId;
     });
-    if (me) me.hp = state.playerHp;
+    if (me) me.hp = state._eliminated ? 0 : state.playerHp;
 
     GameAudio.stopBgm(true);
     if (iWon) GameAudio.victory();
@@ -417,7 +417,7 @@ var Game = (function () {
         mpWinner: winnerId,
         mpPlayers: allPlayers,
       });
-    }, 1000);
+    }, 800);
   }
 
   function nextWord() {
@@ -666,7 +666,7 @@ var Game = (function () {
       }
       setTimeout(function () {
         _checkWinCondition();
-      }, 500);
+      }, 600);
     }
     if (
       state.enemies.every(function (e) {
@@ -875,20 +875,22 @@ var Game = (function () {
   }
 
   function _checkWinCondition() {
-    if (!state.multiplayer || state._endingMp) return;
+    if (!state.multiplayer || state._endingMp || state._gameOverHandled) return;
     var allPl = Multiplayer.getPlayers();
     if (allPl.length < 2) return;
     var alive = allPl.filter(function (p) {
       return (p.hp || 0) > 0;
     });
     if (alive.length <= 1) {
+      state._gameOverHandled = true;
       var wId = alive.length === 1 ? alive[0].id : null;
       Multiplayer.broadcastGameOver(wId);
     }
   }
 
   function endMpByTime() {
-    if (state._endingMp) return;
+    if (state._endingMp || state._gameOverHandled) return;
+    state._gameOverHandled = true;
     Effects.showToast("WAKTU HABIS!", "warning");
     state.running = false;
     clearInterval(state.timerInterval);
@@ -1020,12 +1022,15 @@ var Game = (function () {
     state.mpTimeLimit = MP_DURATION;
     state._eliminated = false;
     state._endingMp = false;
+    state._gameOverHandled = false;
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "block";
 
     clearInterval(state.winCheckInterval);
     state.winCheckInterval = setInterval(function () {
-      if (!state._endingMp && state.running) _checkWinCondition();
+      if (!state._endingMp && !state._gameOverHandled && state.running) {
+        _checkWinCondition();
+      }
     }, 1500);
 
     Multiplayer.on("game_over", function (data) {
@@ -1086,13 +1091,13 @@ var Game = (function () {
       updateMpSidebar();
       renderHpBars();
 
-      if (!state._endingMp) _checkWinCondition();
+      if (!state._endingMp && !state._gameOverHandled) _checkWinCondition();
     });
 
     Multiplayer.on("players_update", function () {
       updateMpSidebar();
       renderHpBars();
-      if (!state._endingMp) _checkWinCondition();
+      if (!state._endingMp && !state._gameOverHandled) _checkWinCondition();
     });
 
     Multiplayer.on("damage_dealt", function (data) {
