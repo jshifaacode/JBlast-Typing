@@ -362,23 +362,48 @@ var Game = (function () {
     var myId = Multiplayer.getPlayerId();
     Multiplayer.updatePlayerHp(myId, 0).then(function () {
       setTimeout(function () {
-        _checkAndBroadcastWinner();
-      }, 800);
+        _fetchAndCheckWinner();
+      }, 1000);
     });
   }
 
-  function _checkAndBroadcastWinner() {
+  function _fetchAndCheckWinner() {
     if (state._gameOverHandled) return;
-    var allPl = Multiplayer.getPlayers();
-    if (allPl.length < 2) return;
-    var alive = allPl.filter(function (p) {
-      return (p.hp || 0) > 0;
-    });
-    if (alive.length <= 1) {
-      state._gameOverHandled = true;
-      var wId = alive.length === 1 ? alive[0].id : null;
-      Multiplayer.broadcastGameOver(wId);
-    }
+    var roomCode = Multiplayer.getCurrentRoom();
+    if (!roomCode) return;
+
+    fetch(FIREBASE_URL + "/rooms/" + roomCode + "/players.json", {
+      cache: "no-store",
+    })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (freshPlayers) {
+        if (state._gameOverHandled) return;
+        if (!freshPlayers) return;
+        var allPl = Object.values(freshPlayers);
+        if (allPl.length < 2) return;
+        var alive = allPl.filter(function (p) {
+          return (p.hp || 0) > 0;
+        });
+        if (alive.length <= 1) {
+          state._gameOverHandled = true;
+          var wId = alive.length === 1 ? alive[0].id : null;
+          Multiplayer.broadcastGameOver(wId);
+        }
+      })
+      .catch(function () {
+        var allPl = Multiplayer.getPlayers();
+        if (allPl.length < 2 || state._gameOverHandled) return;
+        var alive = allPl.filter(function (p) {
+          return (p.hp || 0) > 0;
+        });
+        if (alive.length <= 1) {
+          state._gameOverHandled = true;
+          var wId = alive.length === 1 ? alive[0].id : null;
+          Multiplayer.broadcastGameOver(wId);
+        }
+      });
   }
 
   function _finishMp(iWon, winnerId, allPlayers) {
@@ -666,7 +691,7 @@ var Game = (function () {
       }
       setTimeout(function () {
         _checkWinCondition();
-      }, 600);
+      }, 800);
     }
     if (
       state.enemies.every(function (e) {
@@ -1069,7 +1094,6 @@ var Game = (function () {
 
     Multiplayer.on("hp_update", function (data) {
       var myId = Multiplayer.getPlayerId();
-
       if (data.playerId === myId) {
         var incoming = Math.max(0, data.hp);
         if (incoming < state.playerHp) {
@@ -1081,16 +1105,13 @@ var Game = (function () {
         }
         return;
       }
-
       var allPlayers = Multiplayer.getPlayers();
       var target = allPlayers.find(function (p) {
         return p.id === data.playerId;
       });
       if (target) target.hp = data.hp;
-
       updateMpSidebar();
       renderHpBars();
-
       if (!state._endingMp && !state._gameOverHandled) _checkWinCondition();
     });
 

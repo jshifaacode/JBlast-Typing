@@ -221,9 +221,7 @@ var App = (function () {
           if (btns) btns.style.display = "none";
         }
         setTimeout(function () {
-          if (!_leavingGame && _mpReady) {
-            _leaveMpAndGoMenu();
-          }
+          if (!_leavingGame && _mpReady) _leaveMpAndGoMenu();
         }, 1800);
       }
     });
@@ -275,6 +273,7 @@ var App = (function () {
         btnStart.disabled = !canStart;
         btnStart.style.opacity = canStart ? "1" : "0.4";
         btnStart.style.pointerEvents = canStart ? "auto" : "none";
+        btnStart.textContent = "► START MATCH";
       } else {
         btnStart.style.display = "none";
       }
@@ -359,8 +358,6 @@ var App = (function () {
 
   function _doStartMatch() {
     if (!Multiplayer.getIsHost()) return;
-    var btn = document.getElementById("btnStartMatch");
-    if (!btn) return;
     var playerCount = Multiplayer.getPlayers().length;
     if (playerCount < Multiplayer.getMinPlayers()) {
       Effects.showToast(
@@ -369,16 +366,85 @@ var App = (function () {
       );
       return;
     }
-    if (btn.disabled) return;
+    var btn = document.getElementById("btnStartMatch");
+    if (btn && btn.disabled) return;
     GameAudio.keyPress();
-    btn.disabled = true;
-    btn.style.pointerEvents = "none";
-    btn.textContent = "STARTING...";
+    if (btn) {
+      btn.disabled = true;
+      btn.style.pointerEvents = "none";
+      btn.textContent = "STARTING...";
+    }
     Multiplayer.startGame().then(function () {
-      btn.disabled = false;
-      btn.style.pointerEvents = "auto";
-      btn.textContent = "► START MATCH";
+      if (btn) {
+        btn.disabled = false;
+        btn.style.pointerEvents = "auto";
+        btn.textContent = "► START MATCH";
+      }
     });
+  }
+
+  function _bindStartMatchBtn() {
+    var startMatchBtn = document.getElementById("btnStartMatch");
+    if (!startMatchBtn) return;
+
+    startMatchBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      GameAudio.unlock();
+      _doStartMatch();
+    });
+
+    startMatchBtn.addEventListener(
+      "touchend",
+      function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        GameAudio.unlock();
+        _doStartMatch();
+      },
+      { passive: false },
+    );
+
+    startMatchBtn.addEventListener(
+      "touchstart",
+      function (e) {
+        e.stopPropagation();
+      },
+      { passive: false },
+    );
+  }
+
+  function _bindVoteButtons() {
+    document.addEventListener("click", function (e) {
+      var screen = document.querySelector(".screen.active");
+      if (!screen || screen.id !== "screen-result") return;
+      var acceptTarget = e.target.closest("#btnVoteAccept");
+      var declineTarget = e.target.closest("#btnVoteDecline");
+      if (acceptTarget) {
+        e.preventDefault();
+        _handleVoteAccept();
+      } else if (declineTarget) {
+        e.preventDefault();
+        _handleVoteDecline();
+      }
+    });
+
+    document.addEventListener(
+      "touchend",
+      function (e) {
+        var screen = document.querySelector(".screen.active");
+        if (!screen || screen.id !== "screen-result") return;
+        var acceptTarget = e.target.closest("#btnVoteAccept");
+        var declineTarget = e.target.closest("#btnVoteDecline");
+        if (acceptTarget) {
+          e.preventDefault();
+          _handleVoteAccept();
+        } else if (declineTarget) {
+          e.preventDefault();
+          _handleVoteDecline();
+        }
+      },
+      { passive: false },
+    );
   }
 
   function bindEvents() {
@@ -440,7 +506,6 @@ var App = (function () {
       GameAudio.keyPress();
       showHowToPlay();
     });
-
     addTap("btnCloseHowToPlay", function () {
       hideHowToPlay();
     });
@@ -613,23 +678,8 @@ var App = (function () {
       Effects.showToast("Kode disalin: " + code, "success");
     });
 
-    var startMatchBtn = document.getElementById("btnStartMatch");
-    if (startMatchBtn) {
-      startMatchBtn.addEventListener("click", function (e) {
-        e.stopPropagation();
-        _doStartMatch();
-      });
-      startMatchBtn.addEventListener(
-        "touchend",
-        function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          GameAudio.unlock();
-          _doStartMatch();
-        },
-        { passive: false },
-      );
-    }
+    _bindStartMatchBtn();
+    _bindVoteButtons();
 
     addTap("btnLeaveLobby", function () {
       _mpReady = false;
@@ -685,35 +735,6 @@ var App = (function () {
         if (inp && document.activeElement !== inp && !inp.disabled) inp.focus();
       }
     });
-
-    document.addEventListener("click", function (e) {
-      var screen = document.querySelector(".screen.active");
-      if (!screen || screen.id !== "screen-result") return;
-      if (e.target.closest("#btnVoteAccept")) {
-        _handleVoteAccept();
-        return;
-      }
-      if (e.target.closest("#btnVoteDecline")) {
-        _handleVoteDecline();
-        return;
-      }
-    });
-
-    document.addEventListener(
-      "touchend",
-      function (e) {
-        var screen = document.querySelector(".screen.active");
-        if (!screen || screen.id !== "screen-result") return;
-        if (e.target.closest("#btnVoteAccept")) {
-          e.preventDefault();
-          _handleVoteAccept();
-        } else if (e.target.closest("#btnVoteDecline")) {
-          e.preventDefault();
-          _handleVoteDecline();
-        }
-      },
-      { passive: false },
-    );
 
     addTap("btnPlayAgain", function () {
       var st = Game.getState();

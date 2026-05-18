@@ -9,14 +9,14 @@ var Multiplayer = (function () {
   var _ls = [],
     _bots = [],
     _poll = null;
-  var _rematchStarted = false;
-  var _doingRematch = false;
-  var _lastGameOver = "";
-  var _lastStatus = "";
-  var _lastRematchWord = "";
-  var PLAYER_MAX_HP = 200;
-  var MAX_PLAYERS = 4;
-  var MIN_PLAYERS = 2;
+  var _rematchStarted = false,
+    _doingRematch = false;
+  var _lastGameOver = "",
+    _lastStatus = "",
+    _lastRematchWord = "";
+  var PLAYER_MAX_HP = 200,
+    MAX_PLAYERS = 4,
+    MIN_PLAYERS = 2;
 
   function genCode() {
     var c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
@@ -146,7 +146,6 @@ var Multiplayer = (function () {
         }
 
         var status = r.status || "lobby";
-
         if (!isHost && status === "playing" && _lastStatus !== "playing") {
           _lastStatus = "playing";
           if (r.currentWord) {
@@ -186,7 +185,7 @@ var Multiplayer = (function () {
           _handleRematchVotes(rv);
         }
       });
-    }, 800);
+    }, 600);
   }
 
   function _entry(p) {
@@ -315,8 +314,7 @@ var Multiplayer = (function () {
           '</div><div class="lpc-name bb">' +
           p.name +
           (isMe ? " (YOU)" : "") +
-          '</div><div class="lpc-status" style="color:var(--g)">READY</div>' +
-          "</div>"
+          '</div><div class="lpc-status" style="color:var(--g)">READY</div></div>'
         );
       })
       .join("");
@@ -330,6 +328,7 @@ var Multiplayer = (function () {
         var canStart = playerList.length >= MIN_PLAYERS;
         startBtn.disabled = !canStart;
         startBtn.style.opacity = canStart ? "1" : "0.4";
+        startBtn.style.pointerEvents = canStart ? "auto" : "none";
         startBtn.style.display = "block";
       } else {
         startBtn.style.display = "none";
@@ -485,7 +484,7 @@ var Multiplayer = (function () {
     var val = winnerId || "none";
     if (_lastGameOver === val) return Promise.resolve();
     _lastGameOver = val;
-    return dbUpd("rooms/" + room, { gameOver: val });
+    return dbUpd("rooms/" + room, { gameOver: val, status: "ended" });
   }
 
   function leaveRoom() {
@@ -547,35 +546,27 @@ var Multiplayer = (function () {
   function getPlayers() {
     return Object.values(players);
   }
-
   function getPlayer() {
     return players[pid];
   }
-
   function getCurrentRoom() {
     return room;
   }
-
   function getIsHost() {
     return isHost;
   }
-
   function getPlayerId() {
     return pid;
   }
-
   function generatePlayerId() {
     return genId();
   }
-
   function getMinPlayers() {
     return MIN_PLAYERS;
   }
-
   function getMaxPlayers() {
     return MAX_PLAYERS;
   }
-
   function getRenderAvatar() {
     return _renderAvatar;
   }
