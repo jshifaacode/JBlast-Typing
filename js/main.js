@@ -267,6 +267,10 @@ var App = (function () {
         btnStart.disabled = !canStart;
         btnStart.style.opacity = canStart ? "1" : "0.4";
         btnStart.style.pointerEvents = canStart ? "auto" : "none";
+        if (!btnStart.dataset.bound) {
+          btnStart.dataset.bound = "1";
+          _bindStartMatchBtn(btnStart);
+        }
         btnStart.textContent = "► START MATCH";
       } else {
         btnStart.style.display = "none";
@@ -328,7 +332,10 @@ var App = (function () {
     if (declineBtn) declineBtn.disabled = true;
     Multiplayer.voteRematch(true);
     var statusEl = document.getElementById("rematchVoteStatus");
-    if (statusEl) statusEl.textContent = "Kamu ACCEPT — menunggu lainnya...";
+    if (statusEl) {
+      statusEl.textContent = "Kamu ACCEPT — menunggu lainnya...";
+      statusEl.style.color = "var(--g)";
+    }
     GameAudio.keyPress();
   }
 
@@ -369,7 +376,11 @@ var App = (function () {
       btn.textContent = "STARTING...";
     }
     Multiplayer.startGame().then(function () {
-      if (btn) {
+      if (
+        btn &&
+        document.getElementById("screen-lobby") &&
+        document.getElementById("screen-lobby").classList.contains("active")
+      ) {
         btn.disabled = false;
         btn.style.pointerEvents = "auto";
         btn.textContent = "► START MATCH";
@@ -377,31 +388,32 @@ var App = (function () {
     });
   }
 
-  function _bindStartMatchBtn() {
-    var startMatchBtn = document.getElementById("btnStartMatch");
-    if (!startMatchBtn) return;
+  function _bindStartMatchBtn(btnEl) {
+    var btn = btnEl || document.getElementById("btnStartMatch");
+    if (!btn) return;
 
-    startMatchBtn.addEventListener("click", function (e) {
+    btn.addEventListener("click", function (e) {
       e.stopPropagation();
+      e.preventDefault();
       GameAudio.unlock();
       _doStartMatch();
     });
 
-    startMatchBtn.addEventListener(
+    btn.addEventListener(
+      "touchstart",
+      function (e) {
+        e.stopPropagation();
+      },
+      { passive: true },
+    );
+
+    btn.addEventListener(
       "touchend",
       function (e) {
         e.preventDefault();
         e.stopPropagation();
         GameAudio.unlock();
         _doStartMatch();
-      },
-      { passive: false },
-    );
-
-    startMatchBtn.addEventListener(
-      "touchstart",
-      function (e) {
-        e.stopPropagation();
       },
       { passive: false },
     );
@@ -732,15 +744,12 @@ var App = (function () {
 
     addTap("btnPlayAgain", function () {
       var st = Game.getState();
-      if (st.mode === "multiplayer" && _mpReady) {
-        return;
-      } else {
-        if (!GameAudio.isMuted() && !GameAudio.isPlaying()) {
-          _bgmStarted = true;
-          GameAudio.playBgm();
-        }
-        startSolo();
+      if (st.mode === "multiplayer" && _mpReady) return;
+      if (!GameAudio.isMuted() && !GameAudio.isPlaying()) {
+        _bgmStarted = true;
+        GameAudio.playBgm();
       }
+      startSolo();
     });
 
     addTap("btnBackToMenu", function () {
@@ -810,7 +819,7 @@ var App = (function () {
     UI.showScreen("screen-boot");
   }
 
-  return { init: init, getProfile: getProfile, saveProfile: saveProfile };
+  return { init, getProfile, saveProfile };
 })();
 
 document.addEventListener("DOMContentLoaded", App.init);

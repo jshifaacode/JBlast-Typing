@@ -35,7 +35,9 @@ var Game = (function () {
     _eliminated: false,
     _endingMp: false,
     _gameOverHandled: false,
-    _aliveCount: 0,
+    _lastHpSent: 200,
+    _damageQueue: [],
+    _processingDamage: false,
   };
 
   var PLAYER_MAX_HP = 200;
@@ -110,7 +112,9 @@ var Game = (function () {
     state._eliminated = false;
     state._endingMp = false;
     state._gameOverHandled = false;
-    state._aliveCount = 0;
+    state._lastHpSent = PLAYER_MAX_HP;
+    state._damageQueue = [];
+    state._processingDamage = false;
     clearInterval(state.timerInterval);
     clearInterval(state.winCheckInterval);
 
@@ -125,7 +129,10 @@ var Game = (function () {
     });
 
     var input = document.getElementById("gameInput");
-    if (input) input.value = "";
+    if (input) {
+      input.value = "";
+      input.disabled = false;
+    }
     var indEl = document.getElementById("typingIndicators");
     if (indEl) indEl.innerHTML = "";
 
@@ -322,11 +329,19 @@ var Game = (function () {
         if (f.parentElement) f.remove();
       }, 200);
     }
-    if (state.multiplayer)
-      Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
+    if (state.multiplayer) _syncMyHp();
     if (state.playerHp <= 0) {
       if (state.multiplayer) _handleMpDeath();
       else endGame(false);
+    }
+  }
+
+  function _syncMyHp() {
+    var myId = Multiplayer.getPlayerId();
+    var hp = Math.max(0, Math.ceil(state.playerHp));
+    if (hp !== state._lastHpSent) {
+      state._lastHpSent = hp;
+      Multiplayer.updatePlayerHp(myId, hp);
     }
   }
 
@@ -366,13 +381,16 @@ var Game = (function () {
 
     var myId = Multiplayer.getPlayerId();
     Multiplayer.updatePlayerHp(myId, 0).then(function () {
-      setTimeout(function () {
-        _fetchAndCheckWinner();
-      }, 800);
+      state._lastHpSent = 0;
+      if (Multiplayer.getIsHost()) {
+        setTimeout(function () {
+          _checkAndBroadcastWinner();
+        }, 1000);
+      }
     });
   }
 
-  function _fetchAndCheckWinner() {
+  function _checkAndBroadcastWinner() {
     if (state._gameOverHandled || state._endingMp) return;
     var roomCode = Multiplayer.getCurrentRoom();
     if (!roomCode) return;
@@ -387,7 +405,8 @@ var Game = (function () {
         if (state._gameOverHandled || state._endingMp) return;
         if (!freshPlayers) return;
         var allPl = Object.values(freshPlayers);
-        if (allPl.length < 2) return;
+        var totalPl = allPl.length;
+        if (totalPl < 2) return;
         var alive = allPl.filter(function (p) {
           return (p.hp || 0) > 0;
         });
@@ -400,7 +419,6 @@ var Game = (function () {
       .catch(function () {
         if (state._gameOverHandled || state._endingMp) return;
         var allPl = Multiplayer.getPlayers();
-        if (allPl.length < 2) return;
         var alive = allPl.filter(function (p) {
           return (p.hp || 0) > 0;
         });
@@ -439,7 +457,7 @@ var Game = (function () {
         mpWinner: winnerId,
         mpPlayers: allPlayers,
       });
-    }, 800);
+    }, 600);
   }
 
   function nextWord() {
@@ -478,8 +496,7 @@ var Game = (function () {
           inp.focus();
         }, 50);
     }
-    if (state.multiplayer) Multiplayer.startBotSimulation(state.currentWord);
-    else spawnBotOpponents();
+    if (state.mode === "solo") spawnBotOpponents();
     updateMobileHL();
   }
 
@@ -551,34 +568,7 @@ var Game = (function () {
       if (state.typedIndex >= state.currentWord.length)
         setTimeout(onWordDone, 0);
     } else {
-      state.wrongChars++;
-      state.combo = 0;
-      updateCombo();
-      state.playerHp = Math.max(0, state.playerHp - 2);
-      renderHpBars();
-      GameAudio.keyError();
-      Effects.screenShake(3, 120);
-      input.classList.add("wrong-char");
-      setTimeout(function () {
-        input.classList.remove("wrong-char");
-      }, 200);
-      var chw = document.querySelector('[data-i="' + state.typedIndex + '"]');
-      if (chw) {
-        chw.className = "char wrong";
-        setTimeout(function () {
-          if (chw.className === "char wrong") chw.className = "char active";
-        }, 280);
-      }
-      setTimeout(function () {
-        input.value = "";
-      }, 40);
-      if (state.multiplayer)
-        Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
-      if (state.playerHp <= 0) {
-        if (state.multiplayer) _handleMpDeath();
-        else endGame(false);
-        return;
-      }
+      _handleWrongKey(input);
     }
     updateStats();
   }
@@ -621,22 +611,40 @@ var Game = (function () {
       if (state.typedIndex >= state.currentWord.length)
         setTimeout(onWordDone, 0);
     } else {
-      state.wrongChars++;
-      state.combo = 0;
-      updateCombo();
-      state.playerHp = Math.max(0, state.playerHp - 2);
-      renderHpBars();
-      GameAudio.keyError();
-      Effects.screenShake(3, 100);
-      if (state.multiplayer)
-        Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
-      if (state.playerHp <= 0) {
-        if (state.multiplayer) _handleMpDeath();
-        else endGame(false);
-        return;
-      }
+      _handleWrongKey(null);
     }
     updateStats();
+  }
+
+  function _handleWrongKey(input) {
+    state.wrongChars++;
+    state.combo = 0;
+    updateCombo();
+    state.playerHp = Math.max(0, state.playerHp - 2);
+    renderHpBars();
+    GameAudio.keyError();
+    Effects.screenShake(3, 120);
+    if (input) {
+      input.classList.add("wrong-char");
+      setTimeout(function () {
+        input.classList.remove("wrong-char");
+      }, 200);
+      setTimeout(function () {
+        input.value = "";
+      }, 40);
+    }
+    var chw = document.querySelector('[data-i="' + state.typedIndex + '"]');
+    if (chw) {
+      chw.className = "char wrong";
+      setTimeout(function () {
+        if (chw.className === "char wrong") chw.className = "char active";
+      }, 280);
+    }
+    if (state.multiplayer) _syncMyHp();
+    if (state.playerHp <= 0) {
+      if (state.multiplayer) _handleMpDeath();
+      else endGame(false);
+    }
   }
 
   function onWordDone() {
@@ -668,9 +676,9 @@ var Game = (function () {
     state.playerHp = Math.min(state.maxPlayerHp, state.playerHp + healAmt);
     if (state.playerHp !== prevHp) {
       renderHpBars();
-      if (state.multiplayer)
-        Multiplayer.updatePlayerHp(Multiplayer.getPlayerId(), state.playerHp);
+      if (state.multiplayer) _syncMyHp();
     }
+
     if (state.multiplayer) {
       var myId = Multiplayer.getPlayerId();
       var opponents = Multiplayer.getPlayers().filter(function (p) {
@@ -679,17 +687,12 @@ var Game = (function () {
       if (opponents.length > 0) {
         var oppDmg = Math.floor((18 + comboDmg) * mult);
         opponents.forEach(function (opp) {
-          var newHp = Math.max(0, (opp.hp || 0) - oppDmg);
-          opp.hp = newHp;
-          Multiplayer.updatePlayerHp(opp.id, newHp);
           Multiplayer.sendDamage(opp.id, oppDmg);
         });
         Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
       }
-      setTimeout(function () {
-        _checkWinCondition();
-      }, 800);
     }
+
     if (
       state.enemies.every(function (e) {
         return e.hp <= 0;
@@ -854,8 +857,7 @@ var Game = (function () {
     var start = Date.now();
     var iv = setInterval(function () {
       var el = Date.now() - start;
-      var pct = el / ms;
-      cdEl.style.transform = "scaleX(" + pct + ")";
+      cdEl.style.transform = "scaleX(" + el / ms + ")";
       state.skills[name].cooldown = ms - el;
       if (el >= ms) {
         clearInterval(iv);
@@ -878,7 +880,6 @@ var Game = (function () {
         .padStart(2, "0");
       var s = (state.gameTimer % 60).toString().padStart(2, "0");
       var el = document.getElementById("gameTimer");
-      if (el) el.textContent = m + ":" + s;
       if (state.multiplayer && state.mpTimeLimit > 0) {
         var remaining = state.mpTimeLimit - state.gameTimer;
         if (remaining <= 0) {
@@ -892,25 +893,10 @@ var Game = (function () {
         if (el) el.textContent = rm + ":" + rs;
         if (remaining === 30) Effects.showToast("30 DETIK LAGI!", "warning");
         if (remaining === 10) Effects.showToast("10 DETIK!", "warning");
+      } else {
+        if (el) el.textContent = m + ":" + s;
       }
     }, 1000);
-  }
-
-  function _checkWinCondition() {
-    if (!state.multiplayer || state._endingMp || state._gameOverHandled) return;
-    var allPl = Multiplayer.getPlayers();
-    if (allPl.length < 2) return;
-    var alive = allPl.filter(function (p) {
-      return (p.hp || 0) > 0;
-    });
-
-    if (alive.length === 1) {
-      state._gameOverHandled = true;
-      Multiplayer.broadcastGameOver(alive[0].id);
-    } else if (alive.length === 0) {
-      state._gameOverHandled = true;
-      Multiplayer.broadcastGameOver(null);
-    }
   }
 
   function endMpByTime() {
@@ -941,13 +927,6 @@ var Game = (function () {
     state._gameOverHandled = false;
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "block";
-
-    clearInterval(state.winCheckInterval);
-    state.winCheckInterval = setInterval(function () {
-      if (!state._endingMp && !state._gameOverHandled && state.running) {
-        _checkWinCondition();
-      }
-    }, 1500);
 
     Multiplayer.on("game_over", function (data) {
       if (state._endingMp) return;
@@ -984,39 +963,20 @@ var Game = (function () {
     });
 
     Multiplayer.on("hp_update", function (data) {
-      var myId = Multiplayer.getPlayerId();
-      if (data.playerId === myId) {
-        var incoming = Math.max(0, data.hp);
-        if (incoming < state.playerHp) {
-          state.playerHp = incoming;
-          renderHpBars();
-          if (state.playerHp <= 0 && state.running && !state._eliminated)
-            _handleMpDeath();
-        }
-        return;
-      }
-      var allPlayers = Multiplayer.getPlayers();
-      var target = allPlayers.find(function (p) {
-        return p.id === data.playerId;
-      });
-      if (target) target.hp = data.hp;
       updateMpSidebar();
       renderHpBars();
-      if (!state._endingMp && !state._gameOverHandled) _checkWinCondition();
     });
 
     Multiplayer.on("players_update", function () {
       updateMpSidebar();
       renderHpBars();
-      if (!state._endingMp && !state._gameOverHandled) _checkWinCondition();
     });
 
     Multiplayer.on("damage_dealt", function (data) {
+      if (!state.running || state._eliminated) return;
       var myId = Multiplayer.getPlayerId();
       if (data.to !== myId) return;
-      if (!state.running || state._eliminated) return;
       state.playerHp = Math.max(0, state.playerHp - data.amount);
-      Multiplayer.updatePlayerHp(myId, state.playerHp);
       renderHpBars();
       Effects.damageFlash();
       GameAudio.playerHit();
@@ -1025,6 +985,7 @@ var Game = (function () {
         "error",
         1400,
       );
+      _syncMyHp();
       if (state.playerHp <= 0 && !state._eliminated) _handleMpDeath();
     });
 
@@ -1074,7 +1035,6 @@ var Game = (function () {
     if (!state.running) return;
     state.running = false;
     _stopAllTimers();
-    if (state.multiplayer) Multiplayer.stopBots();
     GameAudio.stopBgm(true);
     if (victory) GameAudio.victory();
     else GameAudio.defeat();

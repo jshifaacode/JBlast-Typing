@@ -11,13 +11,14 @@ var Multiplayer = (function () {
     _doingRematch = false;
   var _lastGameOver = "",
     _lastStatus = "",
-    _lastRematchSig = "",
-    _lastPlayerSnap = "",
+    _lastRematchSig = "";
+  var _lastPlayerSnap = "",
     _lastEventSnap = "";
   var PLAYER_MAX_HP = 200,
     MAX_PLAYERS = 4,
     MIN_PLAYERS = 2;
-  var POLL_INTERVAL = 400;
+  var POLL_INTERVAL = 500;
+  var _processedEvents = {};
 
   function genCode() {
     var c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
@@ -90,6 +91,7 @@ var Multiplayer = (function () {
     _lastRematchSig = "";
     _lastPlayerSnap = "";
     _lastEventSnap = "";
+    _processedEvents = {};
   }
 
   function _doRematch() {
@@ -201,8 +203,11 @@ var Multiplayer = (function () {
           _lastEventSnap = evSnap;
           var events = r.events || {};
           var now = Date.now();
-          Object.values(events).forEach(function (ev) {
-            if (!ev || !ev.ts || now - ev.ts > 3000) return;
+          Object.keys(events).forEach(function (evKey) {
+            var ev = events[evKey];
+            if (!ev || !ev.ts || now - ev.ts > 4000) return;
+            if (_processedEvents[evKey]) return;
+            _processedEvents[evKey] = true;
             if (ev.type === "typing" && ev.from !== pid) {
               emit("player_typing", { playerId: ev.from, name: ev.name });
             }
@@ -211,6 +216,7 @@ var Multiplayer = (function () {
                 from: ev.from,
                 to: ev.to,
                 amount: ev.amount,
+                ts: ev.ts,
               });
             }
           });
@@ -358,7 +364,6 @@ var Multiplayer = (function () {
         var canStart = playerList.length >= MIN_PLAYERS;
         startBtn.disabled = !canStart;
         startBtn.style.opacity = canStart ? "1" : "0.4";
-        startBtn.style.pointerEvents = canStart ? "auto" : "none";
         startBtn.style.display = "block";
       } else {
         startBtn.style.display = "none";
@@ -395,6 +400,7 @@ var Multiplayer = (function () {
     _doingRematch = false;
     _lastGameOver = "";
     _lastRematchSig = "";
+    _processedEvents = {};
     var word = Words.getByWave(1);
     _lastStatus = "playing";
 
@@ -406,6 +412,7 @@ var Multiplayer = (function () {
       gameOver: "",
       rematchVotes: null,
       startedAt: Date.now(),
+      events: {},
     };
     playerList.forEach(function (p) {
       resetUpdates["players/" + p.id + "/hp"] = PLAYER_MAX_HP;
@@ -431,6 +438,7 @@ var Multiplayer = (function () {
 
   function startRematch() {
     if (!isHost || !room) return Promise.resolve();
+    _processedEvents = {};
     var word = Words.getByWave(1);
     var ts = Date.now();
     var updates = {
@@ -441,6 +449,7 @@ var Multiplayer = (function () {
       gameOver: "",
       rematchVotes: null,
       startedAt: ts,
+      events: {},
     };
     return dbGet("rooms/" + room + "/players").then(function (latestPlayers) {
       var allPlayers = latestPlayers || players;
@@ -483,7 +492,7 @@ var Multiplayer = (function () {
       playerId: pid,
       name: players[pid] && players[pid].name,
     });
-    var id = Date.now().toString(36);
+    var id = Date.now().toString(36) + "_t";
     return dbSet("rooms/" + room + "/events/" + id, {
       type: "typing",
       from: pid,
@@ -494,7 +503,8 @@ var Multiplayer = (function () {
 
   function sendDamage(targetId, amount) {
     if (!room || !pid) return Promise.resolve();
-    var id = Date.now().toString(36) + "_d";
+    var id =
+      Date.now().toString(36) + "_d" + Math.random().toString(36).substr(2, 4);
     return dbSet("rooms/" + room + "/events/" + id, {
       type: "damage",
       from: pid,
@@ -508,7 +518,6 @@ var Multiplayer = (function () {
     if (!room) return Promise.resolve();
     var safeHp = Math.max(0, Math.min(PLAYER_MAX_HP, hp));
     if (players[playerId]) players[playerId].hp = safeHp;
-    emit("hp_update", { playerId: playerId, hp: safeHp });
     return dbUpd("rooms/" + room + "/players/" + playerId, { hp: safeHp });
   }
 
@@ -535,38 +544,6 @@ var Multiplayer = (function () {
     _doingRematch = false;
     return Promise.resolve();
   }
-
-  function startBotSimulation(word) {
-    Object.values(players).forEach(function (p) {
-      if (!p.isBot) return;
-      var idx = 0,
-        total = word.replace(/ /g, "").length || 1;
-      var baseDelay = Math.floor(1000 / (p.speed * 4));
-      var iv = setInterval(
-        function () {
-          if (idx >= total) {
-            clearInterval(iv);
-            emit("player_word_complete", {
-              playerId: p.id,
-              wpm: Math.floor(p.speed * 60),
-            });
-            return;
-          }
-          idx++;
-          p.progress = idx / total;
-          p.wpm = Math.floor(p.speed * 50 + Math.random() * 20);
-          emit("player_progress", {
-            playerId: p.id,
-            progress: p.progress,
-            wpm: p.wpm,
-          });
-        },
-        baseDelay + Math.random() * 200,
-      );
-    });
-  }
-
-  function stopBots() {}
 
   function getPlayers() {
     return Object.values(players);
@@ -595,6 +572,9 @@ var Multiplayer = (function () {
   function getRenderAvatar() {
     return _renderAvatar;
   }
+  function getPlayerMaxHp() {
+    return PLAYER_MAX_HP;
+  }
 
   return {
     on,
@@ -604,8 +584,6 @@ var Multiplayer = (function () {
     startGame,
     voteRematch,
     startRematch,
-    startBotSimulation,
-    stopBots,
     sendProgress,
     sendTyping,
     sendDamage,
@@ -620,5 +598,6 @@ var Multiplayer = (function () {
     getMinPlayers,
     getMaxPlayers,
     getRenderAvatar,
+    getPlayerMaxHp,
   };
 })();

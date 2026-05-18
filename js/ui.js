@@ -203,11 +203,8 @@ var UI = (function () {
     if (!p.stats) p.stats = {};
     p.stats.gamesPlayed = (p.stats.gamesPlayed || 0) + 1;
     if (victory) {
-      if (isMultiplayer) {
-        p.stats.mpWins = (p.stats.mpWins || 0) + 1;
-      } else {
-        p.stats.wins = (p.stats.wins || 0) + 1;
-      }
+      if (isMultiplayer) p.stats.mpWins = (p.stats.mpWins || 0) + 1;
+      else p.stats.wins = (p.stats.wins || 0) + 1;
     }
     if (wpm >= (p.stats.bestWpm || 0)) p.stats.bestWpm = wpm;
     p.stats.avgAcc = Math.round(
@@ -303,8 +300,8 @@ var UI = (function () {
           '<div class="rematch-vote-box" id="rematchVoteBox">' +
           '<div class="rematch-vote-lbl bb">MAIN LAGI?</div>' +
           '<div class="rematch-vote-btns" id="rematchVoteBtns">' +
-          '<button class="btn bb" id="btnVoteAccept" style="min-width:120px;padding:14px 20px;font-size:15px;touch-action:manipulation;"><i class="fa-solid fa-check"></i> ACCEPT</button>' +
-          '<button class="btn btn-red bb" id="btnVoteDecline" style="min-width:120px;padding:14px 20px;font-size:15px;touch-action:manipulation;"><i class="fa-solid fa-xmark"></i> DECLINE</button>' +
+          '<button class="btn bb" id="btnVoteAccept" style="min-width:130px;padding:16px 24px;font-size:16px;touch-action:manipulation;cursor:pointer;"><i class="fa-solid fa-check"></i> ACCEPT</button>' +
+          '<button class="btn btn-red bb" id="btnVoteDecline" style="min-width:130px;padding:16px 24px;font-size:16px;touch-action:manipulation;cursor:pointer;"><i class="fa-solid fa-xmark"></i> DECLINE</button>' +
           "</div>" +
           '<div class="rematch-vote-status bb" id="rematchVoteStatus">Pilih Accept atau Decline</div>' +
           "</div>";
@@ -329,7 +326,6 @@ var UI = (function () {
   function updateVoteDisplay(votes, players, myId) {
     var statusEl = document.getElementById("rematchVoteStatus");
     if (!statusEl) return;
-
     var total = players.length;
     var acceptCount = players.filter(function (p) {
       return votes[p.id] === true;
@@ -337,11 +333,9 @@ var UI = (function () {
     var declineCount = players.filter(function (p) {
       return votes[p.id] === false;
     }).length;
-
     var myVote = votes[myId];
     var acceptBtn = document.getElementById("btnVoteAccept");
     var declineBtn = document.getElementById("btnVoteDecline");
-
     if (myVote !== undefined) {
       if (acceptBtn) {
         acceptBtn.disabled = true;
@@ -352,7 +346,6 @@ var UI = (function () {
         declineBtn.style.opacity = myVote === false ? "1" : "0.4";
       }
     }
-
     if (declineCount > 0) {
       statusEl.textContent = declineCount + " pemain menolak rematch.";
       statusEl.style.color = "var(--r)";
@@ -385,11 +378,11 @@ function buildMobileKeyboard() {
     .map(function (row, ri) {
       var back =
         ri === 2
-          ? '<button class="key-btn key-back bb" data-key="BACK" style="touch-action:manipulation;">&#8592;</button>'
+          ? '<button class="key-btn key-back bb" data-key="BACK" style="touch-action:manipulation;min-width:44px;min-height:48px;font-size:18px;">&#8592;</button>'
           : "";
       var space =
         ri === 2
-          ? '<button class="key-btn key-space bb" data-key=" " style="touch-action:manipulation;">SPC</button>'
+          ? '<button class="key-btn key-space bb" data-key=" " style="touch-action:manipulation;min-width:60px;min-height:48px;font-size:14px;">SPC</button>'
           : "";
       var keys = row
         .split("")
@@ -397,7 +390,7 @@ function buildMobileKeyboard() {
           return (
             '<button class="key-btn bb" data-key="' +
             c +
-            '" style="touch-action:manipulation;">' +
+            '" style="touch-action:manipulation;min-height:48px;font-size:18px;">' +
             c +
             "</button>"
           );
