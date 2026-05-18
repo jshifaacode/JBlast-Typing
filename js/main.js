@@ -146,16 +146,9 @@ var App = (function () {
     UI.showScreen("screen-game");
     _setupGameScreen();
 
-    if (!GameAudio.isMuted()) {
-      if (_bgmStarted) {
-        GameAudio.stopBgm(false);
-        setTimeout(function () {
-          GameAudio.playBgm();
-        }, 200);
-      } else {
-        _bgmStarted = true;
-        GameAudio.playBgm();
-      }
+    if (!GameAudio.isMuted() && !GameAudio.isPlaying()) {
+      _bgmStarted = true;
+      GameAudio.playBgm();
     }
 
     Game.init("multiplayer", p.skin, firstWord);
@@ -163,7 +156,7 @@ var App = (function () {
 
     setTimeout(function () {
       _inMpGame = false;
-    }, 3000);
+    }, 2000);
   }
 
   function _updateRematchStatus(votes, total) {
@@ -206,6 +199,7 @@ var App = (function () {
       if (_leavingGame) return;
       _updateRematchStatus(0, 0);
       _mpReady = true;
+      _inMpGame = false;
       startMpGame(data.word);
     });
 

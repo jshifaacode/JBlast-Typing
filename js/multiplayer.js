@@ -6,17 +6,18 @@ var Multiplayer = (function () {
     isHost = false,
     players = {},
     cbs = {};
-  var _ls = [],
-    _bots = [],
-    _poll = null;
+  var _poll = null;
   var _rematchStarted = false,
     _doingRematch = false;
   var _lastGameOver = "",
     _lastStatus = "",
-    _lastRematchWord = "";
+    _lastRematchSig = "",
+    _lastPlayerSnap = "",
+    _lastEventSnap = "";
   var PLAYER_MAX_HP = 200,
     MAX_PLAYERS = 4,
     MIN_PLAYERS = 2;
+  var POLL_INTERVAL = 400;
 
   function genCode() {
     var c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
@@ -38,10 +39,10 @@ var Multiplayer = (function () {
   }
 
   function _fetch(path, opts) {
-    return fetch(
-      FIREBASE_URL + "/" + path + ".json",
-      opts || { cache: "no-store" },
-    )
+    var url = FIREBASE_URL + "/" + path + ".json";
+    var fetchOpts = opts || {};
+    fetchOpts.cache = "no-store";
+    return fetch(url, fetchOpts)
       .then(function (r) {
         return r.json();
       })
@@ -76,17 +77,19 @@ var Multiplayer = (function () {
     }).catch(function () {});
   }
 
-  function stopListeners() {
-    _ls.forEach(function (es) {
-      try {
-        if (typeof es.close === "function") es.close();
-      } catch (x) {}
-    });
-    _ls = [];
+  function stopPoll() {
     if (_poll) {
       clearInterval(_poll);
       _poll = null;
     }
+  }
+
+  function _resetPollState() {
+    _lastGameOver = "";
+    _lastStatus = "";
+    _lastRematchSig = "";
+    _lastPlayerSnap = "";
+    _lastEventSnap = "";
   }
 
   function _doRematch() {
@@ -128,32 +131,52 @@ var Multiplayer = (function () {
   }
 
   function startPoll(code) {
-    if (_poll) {
-      clearInterval(_poll);
-      _poll = null;
-    }
-    var _pollSnap = "";
+    stopPoll();
+    _resetPollState();
+
     _poll = setInterval(function () {
       dbGet("rooms/" + code).then(function (r) {
         if (!r) return;
 
-        var snap = JSON.stringify(r.players || {});
-        if (snap !== _pollSnap) {
-          _pollSnap = snap;
-          players = r.players || {};
+        var freshPlayers = r.players || {};
+        var snap = JSON.stringify(freshPlayers);
+        if (snap !== _lastPlayerSnap) {
+          _lastPlayerSnap = snap;
+          players = freshPlayers;
           emit("players_update", { players: Object.values(players) });
           _updateLobby();
         }
 
         var status = r.status || "lobby";
-        if (!isHost && status === "playing" && _lastStatus !== "playing") {
+
+        if (status === "playing" && _lastStatus !== "playing") {
           _lastStatus = "playing";
+          _rematchStarted = false;
+          _doingRematch = false;
           if (r.currentWord) {
             emit("game_start", {
               word: r.currentWord,
               players: Object.values(players),
             });
           }
+        }
+
+        var rematchSig =
+          (r.rematchWord || "") + "|" + (r.rematchStartedAt || "");
+        if (
+          r.rematchWord &&
+          r.rematchWord !== "" &&
+          rematchSig !== _lastRematchSig &&
+          _lastStatus === "playing"
+        ) {
+          _lastRematchSig = rematchSig;
+          _lastStatus = "rematch";
+          _doingRematch = false;
+          _rematchStarted = false;
+          emit("rematch_start", {
+            word: r.rematchWord,
+            players: Object.values(players),
+          });
         }
 
         var goVal = r.gameOver || "";
@@ -166,26 +189,34 @@ var Multiplayer = (function () {
           emit("game_over", { winnerId: goWin, players: goPl });
         }
 
-        var rematchWord = r.rematchWord || "";
-        if (rematchWord !== "" && rematchWord !== _lastRematchWord) {
-          _lastRematchWord = rematchWord;
-          _lastStatus = "playing";
-          _doingRematch = false;
-          _rematchStarted = false;
-          emit("rematch_start", {
-            word: rematchWord,
-            players: Object.values(players),
-          });
-        }
-
         var rv = r.rematchVotes || {};
         var totalPl = Object.keys(players).length;
         var hasAnyVote = Object.keys(rv).length > 0;
         if (totalPl >= MIN_PLAYERS && hasAnyVote) {
           _handleRematchVotes(rv);
         }
+
+        var evSnap = JSON.stringify(r.events || {});
+        if (evSnap !== _lastEventSnap) {
+          _lastEventSnap = evSnap;
+          var events = r.events || {};
+          var now = Date.now();
+          Object.values(events).forEach(function (ev) {
+            if (!ev || !ev.ts || now - ev.ts > 3000) return;
+            if (ev.type === "typing" && ev.from !== pid) {
+              emit("player_typing", { playerId: ev.from, name: ev.name });
+            }
+            if (ev.type === "damage" && ev.to === pid) {
+              emit("damage_dealt", {
+                from: ev.from,
+                to: ev.to,
+                amount: ev.amount,
+              });
+            }
+          });
+        }
       });
-    }, 600);
+    }, POLL_INTERVAL);
   }
 
   function _entry(p) {
@@ -209,9 +240,6 @@ var Multiplayer = (function () {
     isHost = true;
     _rematchStarted = false;
     _doingRematch = false;
-    _lastStatus = "";
-    _lastGameOver = "";
-    _lastRematchWord = "";
     var code = genCode();
     room = code;
     var data = {
@@ -222,6 +250,7 @@ var Multiplayer = (function () {
       players: {},
       currentWord: "",
       rematchWord: "",
+      rematchStartedAt: 0,
       gameOver: "",
       events: {},
       rematchVotes: {},
@@ -273,9 +302,6 @@ var Multiplayer = (function () {
       room = code;
       _rematchStarted = false;
       _doingRematch = false;
-      _lastStatus = "";
-      _lastGameOver = "";
-      _lastRematchWord = "";
       return dbSet("rooms/" + code + "/players/" + pid, _entry(p))
         .then(function () {
           return dbGet("rooms/" + code + "/players");
@@ -302,19 +328,23 @@ var Multiplayer = (function () {
   }
 
   function _updateLobby() {
-    var grid = document.getElementById("lobbyPlayers");
-    if (!grid) return;
     var playerList = Object.values(players);
-    grid.innerHTML = playerList
+    var lobbyGrid = document.getElementById("lobbyPlayers");
+    if (!lobbyGrid) return;
+    var myId = pid;
+    lobbyGrid.innerHTML = playerList
       .map(function (p) {
-        var isMe = p.id === pid;
+        var isMe = p.id === myId;
         return (
-          '<div class="lpc ready"><div class="lpc-avatar">' +
+          '<div class="lpc ready">' +
+          '<div class="lpc-avatar">' +
           _renderAvatar(p.avatar) +
-          '</div><div class="lpc-name bb">' +
+          "</div>" +
+          '<div class="lpc-name bb">' +
           p.name +
           (isMe ? " (YOU)" : "") +
-          '</div><div class="lpc-status" style="color:var(--g)">READY</div></div>'
+          "</div>" +
+          '<div class="lpc-status" style="color:var(--g)">READY</div></div>'
         );
       })
       .join("");
@@ -364,7 +394,7 @@ var Multiplayer = (function () {
     _rematchStarted = false;
     _doingRematch = false;
     _lastGameOver = "";
-    _lastRematchWord = "";
+    _lastRematchSig = "";
     var word = Words.getByWave(1);
     _lastStatus = "playing";
 
@@ -372,6 +402,7 @@ var Multiplayer = (function () {
       status: "playing",
       currentWord: word,
       rematchWord: "",
+      rematchStartedAt: 0,
       gameOver: "",
       rematchVotes: null,
       startedAt: Date.now(),
@@ -401,13 +432,15 @@ var Multiplayer = (function () {
   function startRematch() {
     if (!isHost || !room) return Promise.resolve();
     var word = Words.getByWave(1);
+    var ts = Date.now();
     var updates = {
       status: "playing",
       currentWord: word,
       rematchWord: word,
+      rematchStartedAt: ts,
       gameOver: "",
       rematchVotes: null,
-      startedAt: Date.now(),
+      startedAt: ts,
     };
     return dbGet("rooms/" + room + "/players").then(function (latestPlayers) {
       var allPlayers = latestPlayers || players;
@@ -421,9 +454,9 @@ var Multiplayer = (function () {
           players[id].progress = 0;
         }
       });
-      _lastStatus = "playing";
+      _lastStatus = "rematch";
       _lastGameOver = "";
-      _lastRematchWord = word;
+      _lastRematchSig = word + "|" + ts;
       return dbUpd("rooms/" + room, updates).then(function () {
         _doingRematch = false;
         emit("rematch_start", { word: word, players: Object.values(players) });
@@ -488,8 +521,7 @@ var Multiplayer = (function () {
   }
 
   function leaveRoom() {
-    stopBots();
-    stopListeners();
+    stopPoll();
     if (room && pid) {
       dbDel("rooms/" + room + "/players/" + pid);
       if (isHost) dbDel("rooms/" + room);
@@ -497,17 +529,14 @@ var Multiplayer = (function () {
     room = null;
     players = {};
     isHost = false;
-    _lastStatus = "";
-    _lastGameOver = "";
-    _lastRematchWord = "";
+    pid = null;
+    _resetPollState();
     _rematchStarted = false;
     _doingRematch = false;
     return Promise.resolve();
   }
 
   function startBotSimulation(word) {
-    _bots.forEach(clearInterval);
-    _bots = [];
     Object.values(players).forEach(function (p) {
       if (!p.isBot) return;
       var idx = 0,
@@ -534,14 +563,10 @@ var Multiplayer = (function () {
         },
         baseDelay + Math.random() * 200,
       );
-      _bots.push(iv);
     });
   }
 
-  function stopBots() {
-    _bots.forEach(clearInterval);
-    _bots = [];
-  }
+  function stopBots() {}
 
   function getPlayers() {
     return Object.values(players);

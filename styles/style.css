@@ -1649,15 +1649,15 @@ body {
   border: 1px solid rgba(90, 106, 154, 0.5);
   color: var(--t1);
   font-family: "Bebas Neue", sans-serif;
-  font-size: 16px;
+  font-size: 18px;
   letter-spacing: 1px;
   min-width: 0;
-  height: 48px;
+  height: 54px;
   padding: 0 2px;
   cursor: pointer;
   transition: all 0.08s;
   flex: 1;
-  max-width: 46px;
+  max-width: 52px;
   text-align: center;
   -webkit-tap-highlight-color: transparent;
   -webkit-appearance: none;
@@ -1665,10 +1665,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 6px;
   box-shadow:
-    0 3px 0 rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 4px 0 rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   touch-action: manipulation;
 }
 .key-btn:active,
@@ -1685,14 +1685,14 @@ body {
   color: var(--p);
 }
 .key-btn.key-back {
-  max-width: 56px;
+  max-width: 64px;
   flex: 1.5;
-  font-size: 13px;
+  font-size: 14px;
 }
 .key-btn.key-space {
-  max-width: 200px;
+  max-width: 220px;
   flex: 5;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 3px;
 }
 
@@ -2140,16 +2140,16 @@ body.overdrive .input-zone {
     gap: 3px;
   }
   .key-btn {
-    height: 46px;
-    font-size: 15px;
-    max-width: 42px;
+    height: 50px;
+    font-size: 17px;
+    max-width: 46px;
   }
   .key-btn.key-back {
-    max-width: 52px;
-    font-size: 12px;
+    max-width: 56px;
+    font-size: 13px;
   }
   .key-btn.key-space {
-    max-width: 180px;
+    max-width: 190px;
   }
   .mp-grid {
     grid-template-columns: 1fr;
@@ -2208,15 +2208,15 @@ body.overdrive .input-zone {
   }
   .key-btn {
     min-width: 0;
-    height: 42px;
-    font-size: 13px;
+    height: 46px;
+    font-size: 15px;
     padding: 0 1px;
   }
   .key-btn.key-back {
-    max-width: 44px;
+    max-width: 48px;
   }
   .key-btn.key-space {
-    max-width: 140px;
+    max-width: 150px;
   }
   #mobileKeyboard {
     gap: 4px;
