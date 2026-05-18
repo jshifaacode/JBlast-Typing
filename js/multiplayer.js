@@ -465,7 +465,6 @@ var Multiplayer = (function () {
       startBtn.disabled = !canStart;
       startBtn.style.opacity = canStart ? "1" : "0.4";
       startBtn.style.display = "block";
-      startBtn.style.pointerEvents = canStart ? "auto" : "none";
     }
   }
 

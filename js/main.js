@@ -303,7 +303,6 @@ var App = (function () {
       var canStart = players.length >= Multiplayer.getMinPlayers();
       btnStart.disabled = !canStart;
       btnStart.style.opacity = canStart ? "1" : "0.4";
-      btnStart.style.pointerEvents = canStart ? "auto" : "none";
     }
   }
 
@@ -589,7 +588,9 @@ var App = (function () {
       Effects.showToast("Kode disalin: " + code, "success");
     });
 
-    addTap("btnStartMatch", function () {
+    function _doStartMatch() {
+      var btn = document.getElementById("btnStartMatch");
+      if (!btn || btn.disabled) return;
       var playerCount = Multiplayer.getPlayers().length;
       if (playerCount < Multiplayer.getMinPlayers()) {
         Effects.showToast(
@@ -599,8 +600,28 @@ var App = (function () {
         return;
       }
       GameAudio.keyPress();
-      Multiplayer.startGame();
+      btn.disabled = true;
+      btn.textContent = "STARTING...";
+      Multiplayer.startGame().then(function () {
+        btn.disabled = false;
+        btn.textContent = "► START MATCH";
+      });
+    }
+
+    document.addEventListener("click", function (e) {
+      if (e.target.closest("#btnStartMatch")) _doStartMatch();
     });
+
+    document.addEventListener(
+      "touchend",
+      function (e) {
+        if (e.target.closest("#btnStartMatch")) {
+          e.preventDefault();
+          _doStartMatch();
+        }
+      },
+      { passive: false },
+    );
 
     addTap("btnLeaveLobby", function () {
       _mpReady = false;
