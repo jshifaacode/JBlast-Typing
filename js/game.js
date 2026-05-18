@@ -330,13 +330,6 @@ var Game = (function () {
     }
   }
 
-  function _getAliveCount() {
-    var allPlayers = Multiplayer.getPlayers();
-    return allPlayers.filter(function (p) {
-      return (p.hp || 0) > 0;
-    }).length;
-  }
-
   function _handleMpDeath() {
     if (state._eliminated) return;
     state._eliminated = true;
@@ -348,6 +341,7 @@ var Game = (function () {
     });
     state._bots.forEach(clearInterval);
     Multiplayer.stopBots();
+
     var inp = document.getElementById("gameInput");
     if (inp) {
       inp.disabled = true;
@@ -364,74 +358,66 @@ var Game = (function () {
       wordPanel.style.opacity = "0.3";
       wordPanel.style.pointerEvents = "none";
     }
+
     var myId = Multiplayer.getPlayerId();
-    Multiplayer.updatePlayerHp(myId, 0);
+    Multiplayer.updatePlayerHp(myId, 0).then(function () {
+      setTimeout(function () {
+        _checkAndBroadcastWinner();
+      }, 600);
+    });
   }
 
-  function _finishMp(iWon) {
+  function _checkAndBroadcastWinner() {
+    if (state._endingMp) return;
+    var allPl = Multiplayer.getPlayers();
+    if (allPl.length < 2) return;
+    var alive = allPl.filter(function (p) {
+      return (p.hp || 0) > 0;
+    });
+    if (alive.length <= 1) {
+      var wId = alive.length === 1 ? alive[0].id : null;
+      Multiplayer.broadcastGameOver(wId);
+    }
+  }
+
+  function _finishMp(iWon, winnerId, allPlayers) {
     if (state._endingMp) return;
     state._endingMp = true;
 
     clearInterval(state._spectateInterval);
     state._spectateInterval = null;
+    clearInterval(state.winCheckInterval);
+    clearInterval(state.timerInterval);
+    state.running = false;
+
+    state.enemies.forEach(function (e) {
+      clearTimeout(e.attackTimer);
+      if (e.burnTick) clearInterval(e.burnTick);
+    });
+    state._bots.forEach(clearInterval);
+    Multiplayer.stopBots();
 
     var myId = Multiplayer.getPlayerId();
-    var roomCode = Multiplayer.getCurrentRoom();
+    var me = allPlayers.find(function (p) {
+      return p.id === myId;
+    });
+    if (me) me.hp = state.playerHp;
 
-    function _showResult(allPlayers) {
-      var myPlayer = allPlayers.find(function (p) {
-        return p.id === myId;
+    GameAudio.stopBgm(true);
+    if (iWon) GameAudio.victory();
+    else GameAudio.defeat();
+
+    setTimeout(function () {
+      UI.showResult({
+        victory: iWon,
+        wpm: calcWpm(),
+        accuracy: calcAcc(),
+        maxCombo: state.maxCombo,
+        score: state.score,
+        mpWinner: winnerId,
+        mpPlayers: allPlayers,
       });
-      if (myPlayer) myPlayer.hp = state.playerHp;
-
-      var winnerId = null;
-      if (iWon) {
-        winnerId = myId;
-      } else {
-        var sorted = allPlayers.slice().sort(function (a, b) {
-          return (b.hp || 0) - (a.hp || 0);
-        });
-        if (sorted[0]) winnerId = sorted[0].id;
-      }
-
-      GameAudio.stopBgm(true);
-      if (iWon) GameAudio.victory();
-      else GameAudio.defeat();
-
-      var wpm = calcWpm();
-      var acc = calcAcc();
-
-      setTimeout(function () {
-        UI.showResult({
-          victory: iWon,
-          wpm: wpm,
-          accuracy: acc,
-          maxCombo: state.maxCombo,
-          score: state.score,
-          mpWinner: winnerId,
-          mpPlayers: allPlayers,
-        });
-      }, 1000);
-    }
-
-    if (roomCode) {
-      var dbUrl = FIREBASE_URL + "/rooms/" + roomCode + "/players.json";
-      fetch(dbUrl, { cache: "no-store" })
-        .then(function (r) {
-          return r.json();
-        })
-        .then(function (data) {
-          var freshPlayers = data
-            ? Object.values(data)
-            : Multiplayer.getPlayers();
-          _showResult(freshPlayers);
-        })
-        .catch(function () {
-          _showResult(Multiplayer.getPlayers());
-        });
-    } else {
-      _showResult(Multiplayer.getPlayers());
-    }
+    }, 1000);
   }
 
   function nextWord() {
@@ -680,7 +666,7 @@ var Game = (function () {
       }
       setTimeout(function () {
         _checkWinCondition();
-      }, 400);
+      }, 500);
     }
     if (
       state.enemies.every(function (e) {
@@ -1039,47 +1025,18 @@ var Game = (function () {
 
     clearInterval(state.winCheckInterval);
     state.winCheckInterval = setInterval(function () {
-      if (!state._endingMp) _checkWinCondition();
-    }, 1000);
+      if (!state._endingMp && state.running) _checkWinCondition();
+    }, 1500);
 
     Multiplayer.on("game_over", function (data) {
       if (state._endingMp) return;
-      state._endingMp = true;
-      clearInterval(state.winCheckInterval);
-      clearInterval(state._spectateInterval);
-      state._spectateInterval = null;
-      state.running = false;
-      clearInterval(state.timerInterval);
-      state.enemies.forEach(function (e) {
-        clearTimeout(e.attackTimer);
-        if (e.burnTick) clearInterval(e.burnTick);
-      });
-      state._bots.forEach(clearInterval);
-      Multiplayer.stopBots();
       var myId = Multiplayer.getPlayerId();
       var iWon = data.winnerId === myId;
       var allPl =
         data.players && data.players.length
           ? data.players
           : Multiplayer.getPlayers();
-      var me = allPl.find(function (p) {
-        return p.id === myId;
-      });
-      if (me) me.hp = state.playerHp;
-      GameAudio.stopBgm(true);
-      if (iWon) GameAudio.victory();
-      else GameAudio.defeat();
-      setTimeout(function () {
-        UI.showResult({
-          victory: iWon,
-          wpm: calcWpm(),
-          accuracy: calcAcc(),
-          maxCombo: state.maxCombo,
-          score: state.score,
-          mpWinner: data.winnerId,
-          mpPlayers: allPl,
-        });
-      }, 1000);
+      _finishMp(iWon, data.winnerId, allPl);
     });
 
     Multiplayer.on("player_progress", function () {

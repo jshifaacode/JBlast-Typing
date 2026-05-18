@@ -109,10 +109,6 @@ var Multiplayer = (function () {
     }
   }
 
-  function _countActivePlayers() {
-    return Object.keys(players).length;
-  }
-
   function _doRematch() {
     if (!isHost || _rematchStarted || _doingRematch) return;
     _doingRematch = true;
@@ -123,8 +119,10 @@ var Multiplayer = (function () {
   }
 
   function _handleRematchVotes(votes) {
+    if (!votes) votes = {};
     var playerIds = Object.keys(players);
     var totalPlayers = playerIds.length;
+    if (totalPlayers < MIN_PLAYERS) return;
     var totalAccept = playerIds.filter(function (k) {
       return votes[k] === true;
     }).length;
@@ -154,13 +152,15 @@ var Multiplayer = (function () {
       clearInterval(_poll);
       _poll = null;
     }
+    var _pollSnap = "";
+    var _pollGameOver = "";
     _poll = setInterval(function () {
       dbGet("rooms/" + code).then(function (r) {
         if (!r) return;
 
         var snap = JSON.stringify(r.players || {});
-        if (snap !== _lastSnap) {
-          _lastSnap = snap;
+        if (snap !== _pollSnap) {
+          _pollSnap = snap;
           players = r.players || {};
           emit("players_update", { players: Object.values(players) });
           _updateLobby();
@@ -179,13 +179,16 @@ var Multiplayer = (function () {
         }
 
         var goVal = r.gameOver || "";
-        if (goVal !== "" && goVal !== _lastGameOver) {
-          _lastGameOver = goVal;
-          var goWin = goVal === "none" ? null : goVal;
-          var goPl = r.players
-            ? Object.values(r.players)
-            : Object.values(players);
-          emit("game_over", { winnerId: goWin, players: goPl });
+        if (goVal !== "" && goVal !== _pollGameOver) {
+          _pollGameOver = goVal;
+          if (goVal !== _lastGameOver) {
+            _lastGameOver = goVal;
+            var goWin = goVal === "none" ? null : goVal;
+            var goPl = r.players
+              ? Object.values(r.players)
+              : Object.values(players);
+            emit("game_over", { winnerId: goWin, players: goPl });
+          }
         }
 
         var rematchWord = r.rematchWord || "";
@@ -200,33 +203,13 @@ var Multiplayer = (function () {
         }
 
         var rv = r.rematchVotes || {};
-        var totalPl = _countActivePlayers();
-        var totalV = Object.keys(players).filter(function (k) {
-          return rv[k] === true;
-        }).length;
-        var hasDeclinePoll = Object.keys(players).some(function (k) {
-          return rv[k] === false;
-        });
-
-        if (totalPl >= MIN_PLAYERS && (totalV > 0 || hasDeclinePoll)) {
-          emit("rematch_votes_update", {
-            votes: totalV,
-            total: totalPl,
-            voteMap: rv,
-            hasDecline: hasDeclinePoll,
-          });
-          if (
-            !hasDeclinePoll &&
-            isHost &&
-            totalV >= totalPl &&
-            !_rematchStarted &&
-            !_doingRematch
-          ) {
-            _doRematch();
-          }
+        var totalPl = Object.keys(players).length;
+        var hasAnyVote = Object.keys(rv).length > 0;
+        if (totalPl >= MIN_PLAYERS && hasAnyVote) {
+          _handleRematchVotes(rv);
         }
       });
-    }, 800);
+    }, 900);
   }
 
   function _entry(p) {
@@ -429,8 +412,19 @@ var Multiplayer = (function () {
         _handleEv(data);
     });
 
-    listen("rooms/" + code + "/rematchVotes", function (data) {
-      _handleRematchVotes(data || {});
+    listen("rooms/" + code + "/rematchVotes", function (data, path) {
+      if (path === "/" || path === "") {
+        _handleRematchVotes(data || {});
+      } else {
+        var rv = {};
+        Object.keys(players).forEach(function (k) {
+          var el = document.getElementById("vote-" + k);
+          if (el) rv[k] = players[k] && players[k]._vote;
+        });
+        dbGet("rooms/" + code + "/rematchVotes").then(function (fresh) {
+          _handleRematchVotes(fresh || {});
+        });
+      }
     });
   }
 
@@ -471,6 +465,7 @@ var Multiplayer = (function () {
       startBtn.disabled = !canStart;
       startBtn.style.opacity = canStart ? "1" : "0.4";
       startBtn.style.display = "block";
+      startBtn.style.pointerEvents = canStart ? "auto" : "none";
     }
   }
 
@@ -501,16 +496,30 @@ var Multiplayer = (function () {
     }
     _rematchStarted = false;
     _doingRematch = false;
+    _lastGameOver = "";
     var word = Words.getByWave(1);
     _lastStatus = "playing";
-    return dbUpd("rooms/" + room, {
+
+    var resetUpdates = {
       status: "playing",
       currentWord: word,
       rematchWord: "",
       gameOver: "",
       rematchVotes: null,
       startedAt: Date.now(),
-    }).then(function () {
+    };
+    playerList.forEach(function (p) {
+      resetUpdates["players/" + p.id + "/hp"] = PLAYER_MAX_HP;
+      resetUpdates["players/" + p.id + "/wpm"] = 0;
+      resetUpdates["players/" + p.id + "/progress"] = 0;
+      if (players[p.id]) {
+        players[p.id].hp = PLAYER_MAX_HP;
+        players[p.id].wpm = 0;
+        players[p.id].progress = 0;
+      }
+    });
+
+    return dbUpd("rooms/" + room, resetUpdates).then(function () {
       emit("game_start", { word: word, players: Object.values(players) });
     });
   }
@@ -603,7 +612,10 @@ var Multiplayer = (function () {
 
   function broadcastGameOver(winnerId) {
     if (!room) return Promise.resolve();
-    return dbUpd("rooms/" + room, { gameOver: winnerId || "none" });
+    var val = winnerId || "none";
+    if (_lastGameOver === val) return Promise.resolve();
+    _lastGameOver = val;
+    return dbUpd("rooms/" + room, { gameOver: val });
   }
 
   function leaveRoom() {
