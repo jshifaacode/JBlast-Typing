@@ -148,15 +148,17 @@ var App = (function () {
     var p = getProfile();
     UI.showScreen("screen-game");
     _setupGameScreen();
-    if (!GameAudio.isMuted() && !GameAudio.isPlaying()) {
-      _bgmStarted = true;
-      GameAudio.playBgm();
+    if (!GameAudio.isMuted()) {
+      if (!GameAudio.isPlaying()) {
+        _bgmStarted = true;
+        GameAudio.playBgm();
+      }
     }
     Game.init("multiplayer", p.skin, firstWord);
     Game.setupMultiplayer();
     setTimeout(function () {
       _inMpGame = false;
-    }, 3000);
+    }, 5000);
   }
 
   function _leaveMp() {
@@ -165,12 +167,13 @@ var App = (function () {
     _inMpSession = false;
     _inMpGame = false;
     _listenersBound = false;
+    var wasBgmStarted = _bgmStarted;
+    _bgmStarted = false;
     Multiplayer.leaveRoom().then(function () {
       _mpRoomCode = null;
       _mpIsHost = false;
       _leavingGame = false;
-      _bgmStarted = false;
-      GameAudio.stopBgm(false);
+      if (wasBgmStarted) GameAudio.stopBgm(false);
       UI.updateMenuDisplay(getProfile());
       UI.showScreen("screen-menu");
     });
