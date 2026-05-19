@@ -548,8 +548,8 @@ var Multiplayer = (function () {
         players[p.id].progress = 0;
       }
     });
-    _lastStatus = "playing";
     return dbUpd("rooms/" + room, updates).then(function () {
+      _lastStatus = "playing"; // set AFTER write so polling can still fire game_start for host
       _startHostDmgProcessor();
     });
   }
