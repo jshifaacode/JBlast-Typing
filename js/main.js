@@ -310,36 +310,14 @@ var App = (function () {
       btn.style.pointerEvents = "none";
       btn.textContent = "STARTING...";
     }
-    Multiplayer.startGame()
-      .then(function () {
-        console.log(
-          "[HOST] startGame resolved. _inMpSession:",
-          _inMpSession,
-          "_leavingGame:",
-          _leavingGame,
-          "_inMpGame:",
-          _inMpGame,
-          "word:",
-          Multiplayer._currentWord,
-        );
-        if (!_inMpSession || _leavingGame) {
-          console.log("[HOST] blocked by session/leaving flags");
-          return;
-        }
-        _inMpGame = false; // reset guard so startMpGame proceeds
-        var word = Multiplayer._currentWord || null;
+    Multiplayer.startGame().then(function () {
+      if (_inMpSession && !_leavingGame) {
+        var word = Multiplayer.getCurrentWord
+          ? Multiplayer.getCurrentWord()
+          : null;
         startMpGame(word);
-      })
-      .catch(function (err) {
-        console.error("[HOST] startGame failed:", err);
-        var btn = document.getElementById("btnStartMatch");
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = "START MATCH";
-          btn.style.pointerEvents = "auto";
-        }
-        Effects.showToast("Gagal memulai game, coba lagi!", "error");
-      });
+      }
+    });
   }
 
   function _handleVoteAccept() {
