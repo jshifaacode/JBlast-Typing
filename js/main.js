@@ -3,32 +3,36 @@ var App = (function () {
   var KEY = "keystorm_v2";
   var _mpRoomCode = null;
   var _mpIsHost = false;
+  var _inMpSession = false;
   var _inMpGame = false;
-  var _mpReady = false;
-  var _mpListenersReady = false;
+  var _listenersBound = false;
   var _leavingGame = false;
   var _bgmStarted = false;
 
   function getProfile() {
     if (!profile) {
-      var s = localStorage.getItem(KEY);
-      profile = s
-        ? JSON.parse(s)
-        : {
-            name: "",
-            avatar: "BOLT",
-            skin: "default",
-            xp: 0,
-            level: 1,
-            stats: {},
-          };
+      try {
+        var s = localStorage.getItem(KEY);
+        profile = s ? JSON.parse(s) : null;
+      } catch (x) {}
+      if (!profile)
+        profile = {
+          name: "",
+          avatar: "BOLT",
+          skin: "default",
+          xp: 0,
+          level: 1,
+          stats: {},
+        };
     }
     return profile;
   }
 
   function saveProfile(p) {
     profile = p;
-    localStorage.setItem(KEY, JSON.stringify(p));
+    try {
+      localStorage.setItem(KEY, JSON.stringify(p));
+    } catch (x) {}
   }
 
   function addTap(id, fn) {
@@ -75,7 +79,7 @@ var App = (function () {
         }, 300);
         return;
       }
-      el.textContent += lines[i] + "\n";
+      if (el) el.textContent += lines[i] + "\n";
       i++;
       setTimeout(add, 260 + Math.random() * 160);
     }
@@ -107,7 +111,7 @@ var App = (function () {
         inp.disabled = false;
       }
       setTimeout(function () {
-        if (inp && !_leavingGame) inp.focus();
+        if (inp) inp.focus();
       }, 200);
     }
   }
@@ -136,10 +140,10 @@ var App = (function () {
     document.querySelectorAll(".skill-btn").forEach(function (b) {
       b.disabled = true;
     });
-    var wordPanel = document.querySelector(".word-panel");
-    if (wordPanel) {
-      wordPanel.style.opacity = "";
-      wordPanel.style.pointerEvents = "";
+    var wp = document.querySelector(".word-panel");
+    if (wp) {
+      wp.style.opacity = "";
+      wp.style.pointerEvents = "";
     }
 
     var p = getProfile();
@@ -156,93 +160,15 @@ var App = (function () {
 
     setTimeout(function () {
       _inMpGame = false;
-    }, 2000);
+    }, 3000);
   }
 
-  function _updateRematchStatus(votes, total) {
-    var el = document.getElementById("rematchStatus");
-    if (!el) return;
-    if (total < 2) {
-      el.style.display = "none";
-      el.textContent = "";
-      return;
-    }
-    if (votes >= total) {
-      el.style.display = "block";
-      el.textContent = "Semua siap! Memulai rematch...";
-    } else if (votes > 0) {
-      el.style.display = "block";
-      el.textContent =
-        "Voting rematch: " + votes + "/" + total + " pemain siap...";
-    } else {
-      el.style.display = "none";
-      el.textContent = "";
-    }
-  }
-
-  function _setupMpListeners() {
-    if (_mpListenersReady) return;
-    _mpListenersReady = true;
-
-    Multiplayer.on("players_update", function (data) {
-      var code = Multiplayer.getCurrentRoom();
-      var host = Multiplayer.getIsHost();
-      if (code) buildLobby(data.players, host, code);
-    });
-
-    Multiplayer.on("game_start", function (data) {
-      if (_leavingGame) return;
-      startMpGame(data.word);
-    });
-
-    Multiplayer.on("rematch_start", function (data) {
-      if (_leavingGame) return;
-      _updateRematchStatus(0, 0);
-      _mpReady = true;
-      _inMpGame = false;
-      startMpGame(data.word);
-    });
-
-    Multiplayer.on("rematch_votes_update", function (data) {
-      _updateRematchStatus(data.votes, data.total);
-      var players = Multiplayer.getPlayers();
-      var myId = Multiplayer.getPlayerId();
-      UI.updateVoteDisplay(data.voteMap || {}, players, myId);
-      if (data.hasDecline) {
-        var voteBox = document.getElementById("rematchVoteBox");
-        if (voteBox) {
-          var btns = voteBox.querySelector(".rematch-vote-btns");
-          if (btns) btns.style.display = "none";
-        }
-        setTimeout(function () {
-          if (!_leavingGame && _mpReady) _leaveMpAndGoMenu();
-        }, 1800);
-      }
-    });
-
-    Multiplayer.on("kicked", function () {
-      _mpReady = false;
-      _leavingGame = true;
-      Multiplayer.leaveRoom().then(function () {
-        _mpRoomCode = null;
-        _mpIsHost = false;
-        _leavingGame = false;
-        Effects.showToast(
-          "Kamu dikeluarkan dari room oleh host!",
-          "error",
-          3000,
-        );
-        UI.updateMenuDisplay(getProfile());
-        UI.showScreen("screen-menu");
-      });
-    });
-  }
-
-  function _leaveMpAndGoMenu() {
+  function _leaveMp() {
     if (_leavingGame) return;
-    _mpReady = false;
-    _mpListenersReady = false;
     _leavingGame = true;
+    _inMpSession = false;
+    _inMpGame = false;
+    _listenersBound = false;
     Multiplayer.leaveRoom().then(function () {
       _mpRoomCode = null;
       _mpIsHost = false;
@@ -254,34 +180,68 @@ var App = (function () {
     });
   }
 
-  function buildLobby(players, isHost, roomCode) {
+  function _setupMpListeners() {
+    if (_listenersBound) return;
+    _listenersBound = true;
+
+    Multiplayer.on("players_update", function (data) {
+      if (!_inMpSession) return;
+      var code = Multiplayer.getCurrentRoom();
+      var host = Multiplayer.getIsHost();
+      if (code) buildLobby(data.players, host, code);
+    });
+
+    Multiplayer.on("game_start", function (data) {
+      if (_leavingGame || !_inMpSession) return;
+      startMpGame(data.word);
+    });
+
+    Multiplayer.on("rematch_start", function (data) {
+      if (_leavingGame || !_inMpSession) return;
+      _inMpGame = false;
+      startMpGame(data.word);
+    });
+
+    Multiplayer.on("rematch_votes_update", function (data) {
+      if (!_inMpSession) return;
+      var players = Multiplayer.getPlayers();
+      var myId = Multiplayer.getPlayerId();
+      UI.updateVoteDisplay(data.voteMap || {}, players, myId);
+      var rsEl = document.getElementById("rematchStatus");
+      if (rsEl) {
+        if (data.votes >= data.total && data.total >= 2) {
+          rsEl.style.display = "block";
+          rsEl.textContent = "Semua setuju! Memulai rematch...";
+        } else if (data.votes > 0) {
+          rsEl.style.display = "block";
+          rsEl.textContent =
+            "Voting: " + data.votes + "/" + data.total + " pemain siap...";
+        } else {
+          rsEl.style.display = "none";
+        }
+      }
+      if (data.hasDecline) {
+        setTimeout(function () {
+          if (_inMpSession && !_leavingGame) _leaveMp();
+        }, 1800);
+      }
+    });
+  }
+
+  function buildLobby(players, isHostFlag, roomCode) {
     var lobbyCode = document.getElementById("lobbyCode");
-    var btnStart = document.getElementById("btnStartMatch");
     var lobbyStatus = document.getElementById("lobbyStatus");
     var grid = document.getElementById("lobbyPlayers");
+    var btnStart = document.getElementById("btnStartMatch");
+
     if (lobbyCode) lobbyCode.textContent = roomCode;
-    if (btnStart) {
-      if (isHost) {
-        btnStart.style.display = "block";
-        var canStart = players.length >= Multiplayer.getMinPlayers();
-        btnStart.disabled = !canStart;
-        btnStart.style.opacity = canStart ? "1" : "0.4";
-        btnStart.style.pointerEvents = canStart ? "auto" : "none";
-        if (!btnStart.dataset.bound) {
-          btnStart.dataset.bound = "1";
-          _bindStartMatchBtn(btnStart);
-        }
-        btnStart.textContent = "► START MATCH";
-      } else {
-        btnStart.style.display = "none";
-      }
-    }
     if (lobbyStatus)
       lobbyStatus.textContent =
         players.length +
         "/" +
         Multiplayer.getMaxPlayers() +
         " PILOT(S) IN LOBBY";
+
     if (grid) {
       var myId = Multiplayer.getPlayerId();
       grid.innerHTML = players
@@ -296,71 +256,47 @@ var App = (function () {
             p.name +
             (isMe ? " (YOU)" : "") +
             "</div>" +
-            '<div class="lpc-status" style="color:var(--g)">READY</div>' +
-            "</div>"
+            '<div class="lpc-status" style="color:var(--g)">READY</div></div>'
           );
         })
         .join("");
     }
-  }
 
-  function showHowToPlay() {
-    var modal = document.getElementById("howToPlayModal");
-    if (modal) {
-      modal.style.display = "flex";
-      setTimeout(function () {
-        modal.classList.add("active");
-      }, 10);
+    if (btnStart) {
+      if (isHostFlag) {
+        btnStart.style.display = "block";
+        var canStart = players.length >= Multiplayer.getMinPlayers();
+        btnStart.disabled = !canStart;
+        btnStart.style.opacity = canStart ? "1" : "0.4";
+        btnStart.style.pointerEvents = canStart ? "auto" : "none";
+        if (!btnStart._startBound) {
+          btnStart._startBound = true;
+          btnStart.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            GameAudio.unlock();
+            _doStartMatch();
+          });
+          btnStart.addEventListener(
+            "touchend",
+            function (e) {
+              e.preventDefault();
+              e.stopPropagation();
+              GameAudio.unlock();
+              _doStartMatch();
+            },
+            { passive: false },
+          );
+        }
+      } else {
+        btnStart.style.display = "none";
+      }
     }
-  }
-
-  function hideHowToPlay() {
-    var modal = document.getElementById("howToPlayModal");
-    if (modal) {
-      modal.classList.remove("active");
-      setTimeout(function () {
-        modal.style.display = "none";
-      }, 300);
-    }
-  }
-
-  function _handleVoteAccept() {
-    var acceptBtn = document.getElementById("btnVoteAccept");
-    var declineBtn = document.getElementById("btnVoteDecline");
-    if (!acceptBtn || acceptBtn.disabled) return;
-    acceptBtn.disabled = true;
-    if (declineBtn) declineBtn.disabled = true;
-    Multiplayer.voteRematch(true);
-    var statusEl = document.getElementById("rematchVoteStatus");
-    if (statusEl) {
-      statusEl.textContent = "Kamu ACCEPT — menunggu lainnya...";
-      statusEl.style.color = "var(--g)";
-    }
-    GameAudio.keyPress();
-  }
-
-  function _handleVoteDecline() {
-    var acceptBtn = document.getElementById("btnVoteAccept");
-    var declineBtn = document.getElementById("btnVoteDecline");
-    if (!declineBtn || declineBtn.disabled) return;
-    if (acceptBtn) acceptBtn.disabled = true;
-    declineBtn.disabled = true;
-    Multiplayer.voteRematch(false);
-    var statusEl = document.getElementById("rematchVoteStatus");
-    if (statusEl) {
-      statusEl.textContent = "Kamu DECLINE — kembali ke menu...";
-      statusEl.style.color = "var(--r)";
-    }
-    GameAudio.keyError();
-    setTimeout(function () {
-      _leaveMpAndGoMenu();
-    }, 1200);
   }
 
   function _doStartMatch() {
     if (!Multiplayer.getIsHost()) return;
-    var playerCount = Multiplayer.getPlayers().length;
-    if (playerCount < Multiplayer.getMinPlayers()) {
+    if (Multiplayer.getPlayers().length < Multiplayer.getMinPlayers()) {
       Effects.showToast(
         "Butuh minimal " + Multiplayer.getMinPlayers() + " pemain!",
         "error",
@@ -375,76 +311,61 @@ var App = (function () {
       btn.style.pointerEvents = "none";
       btn.textContent = "STARTING...";
     }
-    Multiplayer.startGame().then(function () {
-      if (
-        btn &&
-        document.getElementById("screen-lobby") &&
-        document.getElementById("screen-lobby").classList.contains("active")
-      ) {
-        btn.disabled = false;
-        btn.style.pointerEvents = "auto";
-        btn.textContent = "► START MATCH";
-      }
-    });
+    Multiplayer.startGame();
   }
 
-  function _bindStartMatchBtn(btnEl) {
-    var btn = btnEl || document.getElementById("btnStartMatch");
-    if (!btn) return;
+  function _handleVoteAccept() {
+    var aBtn = document.getElementById("btnVoteAccept");
+    var dBtn = document.getElementById("btnVoteDecline");
+    if (!aBtn || aBtn.disabled) return;
+    aBtn.disabled = true;
+    if (dBtn) dBtn.disabled = true;
+    Multiplayer.voteRematch(true);
+    var st = document.getElementById("rematchVoteStatus");
+    if (st) {
+      st.textContent = "Kamu ACCEPT — menunggu lainnya...";
+      st.style.color = "var(--g)";
+    }
+    GameAudio.keyPress();
+  }
 
-    btn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      e.preventDefault();
-      GameAudio.unlock();
-      _doStartMatch();
-    });
-
-    btn.addEventListener(
-      "touchstart",
-      function (e) {
-        e.stopPropagation();
-      },
-      { passive: true },
-    );
-
-    btn.addEventListener(
-      "touchend",
-      function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        GameAudio.unlock();
-        _doStartMatch();
-      },
-      { passive: false },
-    );
+  function _handleVoteDecline() {
+    var aBtn = document.getElementById("btnVoteAccept");
+    var dBtn = document.getElementById("btnVoteDecline");
+    if (!dBtn || dBtn.disabled) return;
+    if (aBtn) aBtn.disabled = true;
+    dBtn.disabled = true;
+    Multiplayer.voteRematch(false);
+    var st = document.getElementById("rematchVoteStatus");
+    if (st) {
+      st.textContent = "Kamu DECLINE — kembali ke menu...";
+      st.style.color = "var(--r)";
+    }
+    GameAudio.keyError();
+    setTimeout(function () {
+      if (_inMpSession && !_leavingGame) _leaveMp();
+    }, 1200);
   }
 
   function _bindVoteButtons() {
     document.addEventListener("click", function (e) {
-      var screen = document.querySelector(".screen.active");
-      if (!screen || screen.id !== "screen-result") return;
-      var acceptTarget = e.target.closest("#btnVoteAccept");
-      var declineTarget = e.target.closest("#btnVoteDecline");
-      if (acceptTarget) {
+      if (!_inMpSession) return;
+      if (e.target.closest("#btnVoteAccept")) {
         e.preventDefault();
         _handleVoteAccept();
-      } else if (declineTarget) {
+      } else if (e.target.closest("#btnVoteDecline")) {
         e.preventDefault();
         _handleVoteDecline();
       }
     });
-
     document.addEventListener(
       "touchend",
       function (e) {
-        var screen = document.querySelector(".screen.active");
-        if (!screen || screen.id !== "screen-result") return;
-        var acceptTarget = e.target.closest("#btnVoteAccept");
-        var declineTarget = e.target.closest("#btnVoteDecline");
-        if (acceptTarget) {
+        if (!_inMpSession) return;
+        if (e.target.closest("#btnVoteAccept")) {
           e.preventDefault();
           _handleVoteAccept();
-        } else if (declineTarget) {
+        } else if (e.target.closest("#btnVoteDecline")) {
           e.preventDefault();
           _handleVoteDecline();
         }
@@ -468,7 +389,8 @@ var App = (function () {
     });
 
     addTap("btnConfirmLogin", function () {
-      var name = (document.getElementById("inputUsername").value || "").trim();
+      var nameEl = document.getElementById("inputUsername");
+      var name = (nameEl ? nameEl.value : "").trim();
       if (!name) {
         Effects.showToast("Masukkan callsign dulu!", "error");
         return;
@@ -487,12 +409,15 @@ var App = (function () {
       UI.showScreen("screen-menu");
     });
 
-    document
-      .getElementById("inputUsername")
-      .addEventListener("keydown", function (e) {
-        if (e.key === "Enter")
-          document.getElementById("btnConfirmLogin").click();
+    var unEl = document.getElementById("inputUsername");
+    if (unEl) {
+      unEl.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          var cb = document.getElementById("btnConfirmLogin");
+          if (cb) cb.click();
+        }
       });
+    }
 
     addTap("btnSolo", function () {
       if (!GameAudio.isMuted() && !GameAudio.isPlaying()) {
@@ -507,20 +432,20 @@ var App = (function () {
       GameAudio.keyPress();
       UI.showScreen("screen-multiplayer");
     });
-
     addTap("btnHowToPlay", function () {
       GameAudio.keyPress();
-      showHowToPlay();
+      _showHowToPlay();
     });
     addTap("btnCloseHowToPlay", function () {
-      hideHowToPlay();
+      _hideHowToPlay();
     });
 
-    document
-      .getElementById("howToPlayModal")
-      .addEventListener("click", function (e) {
-        if (e.target === this) hideHowToPlay();
+    var htpModal = document.getElementById("howToPlayModal");
+    if (htpModal) {
+      htpModal.addEventListener("click", function (e) {
+        if (e.target === this) _hideHowToPlay();
       });
+    }
 
     addTap("btnStats", function () {
       GameAudio.keyPress();
@@ -569,12 +494,15 @@ var App = (function () {
     addTap("btnLogout", function () {
       GameAudio.keyPress();
       if (confirm("Logout dan hapus profil kamu?")) {
-        localStorage.removeItem(KEY);
+        try {
+          localStorage.removeItem(KEY);
+        } catch (x) {}
         profile = null;
         UI.showScreen("screen-login");
         UI.buildAvatarGrid();
         UI.buildSkinOptions();
-        document.getElementById("inputUsername").value = "";
+        var inp = document.getElementById("inputUsername");
+        if (inp) inp.value = "";
       }
     });
 
@@ -596,38 +524,36 @@ var App = (function () {
       var p = getProfile();
       p.id = p.id || Multiplayer.generatePlayerId();
       saveProfile(p);
-      var btnCreate = document.getElementById("btnCreateRoom");
-      btnCreate.disabled = true;
-      btnCreate.textContent = "CREATING...";
-      _mpListenersReady = false;
+      var btn = document.getElementById("btnCreateRoom");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "CREATING...";
+      }
+      _listenersBound = false;
       _setupMpListeners();
-      Multiplayer.createRoom({
-        id: p.id,
-        name: p.name,
-        avatar: p.avatar,
-        hp: 200,
-        wpm: 0,
-        progress: 0,
-      }).then(function (r) {
-        btnCreate.disabled = false;
-        btnCreate.textContent = "CREATE ROOM";
-        if (!r) {
-          Effects.showToast("Gagal buat room!", "error");
-          return;
-        }
-        _mpRoomCode = r.roomCode;
-        _mpIsHost = true;
-        _mpReady = true;
-        buildLobby(r.players, true, r.roomCode);
-        UI.showScreen("screen-lobby");
-        Effects.showToast("Room dibuat! Share kode ke teman.", "success");
-      });
+      Multiplayer.createRoom({ id: p.id, name: p.name, avatar: p.avatar }).then(
+        function (r) {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "CREATE ROOM";
+          }
+          if (!r) {
+            Effects.showToast("Gagal buat room!", "error");
+            return;
+          }
+          _mpRoomCode = r.roomCode;
+          _mpIsHost = true;
+          _inMpSession = true;
+          buildLobby(r.players, true, r.roomCode);
+          UI.showScreen("screen-lobby");
+          Effects.showToast("Room dibuat! Share kode ke teman.", "success");
+        },
+      );
     });
 
     addTap("btnJoinRoom", function () {
-      var code = (document.getElementById("inputRoomCode").value || "")
-        .trim()
-        .toUpperCase();
+      var codeEl = document.getElementById("inputRoomCode");
+      var code = (codeEl ? codeEl.value : "").trim().toUpperCase();
       if (code.length < 4) {
         Effects.showToast("Kode minimal 4 karakter!", "error");
         return;
@@ -635,25 +561,26 @@ var App = (function () {
       var p = getProfile();
       p.id = p.id || Multiplayer.generatePlayerId();
       saveProfile(p);
-      var btnJoin = document.getElementById("btnJoinRoom");
-      btnJoin.disabled = true;
-      btnJoin.textContent = "JOINING...";
-      _mpListenersReady = false;
+      var btn = document.getElementById("btnJoinRoom");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "JOINING...";
+      }
+      _listenersBound = false;
       _setupMpListeners();
       Multiplayer.joinRoom(code, {
         id: p.id,
         name: p.name,
         avatar: p.avatar,
-        hp: 200,
-        wpm: 0,
-        progress: 0,
       }).then(function (r) {
-        btnJoin.disabled = false;
-        btnJoin.textContent = "JOIN ROOM";
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "JOIN ROOM";
+        }
         if (!r) return;
         _mpRoomCode = r.roomCode;
         _mpIsHost = false;
-        _mpReady = true;
+        _inMpSession = true;
         buildLobby(r.players, false, r.roomCode);
         UI.showScreen("screen-lobby");
         Effects.showToast(
@@ -663,14 +590,16 @@ var App = (function () {
       });
     });
 
-    document
-      .getElementById("inputRoomCode")
-      .addEventListener("input", function () {
+    var rcEl = document.getElementById("inputRoomCode");
+    if (rcEl) {
+      rcEl.addEventListener("input", function () {
         this.value = this.value.toUpperCase();
       });
+    }
 
     addTap("btnCopyCode", function () {
-      var code = document.getElementById("lobbyCode").textContent;
+      var codeEl = document.getElementById("lobbyCode");
+      var code = codeEl ? codeEl.textContent : "";
       if (navigator.clipboard) {
         navigator.clipboard.writeText(code).catch(function () {});
       } else {
@@ -678,28 +607,27 @@ var App = (function () {
         ta.value = code;
         document.body.appendChild(ta);
         ta.select();
-        document.execCommand("copy");
+        try {
+          document.execCommand("copy");
+        } catch (x) {}
         ta.remove();
       }
       Effects.showToast("Kode disalin: " + code, "success");
     });
 
-    _bindStartMatchBtn();
-    _bindVoteButtons();
-
     addTap("btnLeaveLobby", function () {
-      _mpReady = false;
-      _leavingGame = true;
-      _mpListenersReady = false;
+      _inMpSession = false;
+      _listenersBound = false;
       Multiplayer.leaveRoom().then(function () {
         _mpRoomCode = null;
         _mpIsHost = false;
-        _bgmStarted = false;
         GameAudio.stopBgm(false);
-        _leavingGame = false;
+        _bgmStarted = false;
         UI.showScreen("screen-menu");
       });
     });
+
+    _bindVoteButtons();
 
     var gameInp = document.getElementById("gameInput");
     if (gameInp) {
@@ -734,17 +662,15 @@ var App = (function () {
     });
 
     document.addEventListener("keypress", function () {
-      if (_leavingGame) return;
       var active = document.querySelector(".screen.active");
-      if (active && active.id === "screen-game" && !isMobile()) {
-        var inp = document.getElementById("gameInput");
-        if (inp && document.activeElement !== inp && !inp.disabled) inp.focus();
-      }
+      if (!active || active.id !== "screen-game" || isMobile()) return;
+      var inp = document.getElementById("gameInput");
+      if (inp && document.activeElement !== inp && !inp.disabled) inp.focus();
     });
 
     addTap("btnPlayAgain", function () {
       var st = Game.getState();
-      if (st.mode === "multiplayer" && _mpReady) return;
+      if (st.multiplayer) return;
       if (!GameAudio.isMuted() && !GameAudio.isPlaying()) {
         _bgmStarted = true;
         GameAudio.playBgm();
@@ -753,18 +679,13 @@ var App = (function () {
     });
 
     addTap("btnBackToMenu", function () {
-      _leavingGame = true;
-      var inp = document.getElementById("gameInput");
-      if (inp) inp.blur();
-      var rsEl = document.getElementById("rematchStatus");
-      if (rsEl) rsEl.style.display = "none";
       var st = Game.getState();
-      if (st.mode === "multiplayer" && _mpReady) {
-        _leaveMpAndGoMenu();
+      if (st.multiplayer && _inMpSession) {
+        _leaveMp();
       } else {
+        _leavingGame = false;
         GameAudio.stopBgm(true);
         _bgmStarted = false;
-        _leavingGame = false;
         UI.updateMenuDisplay(getProfile());
         UI.showScreen("screen-menu");
       }
@@ -772,10 +693,28 @@ var App = (function () {
 
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) GameAudio.pauseBgm();
-      else {
-        if (GameAudio.isPlaying()) GameAudio.resumeBgm();
-      }
+      else if (GameAudio.isPlaying()) GameAudio.resumeBgm();
     });
+  }
+
+  function _showHowToPlay() {
+    var m = document.getElementById("howToPlayModal");
+    if (m) {
+      m.style.display = "flex";
+      setTimeout(function () {
+        m.classList.add("active");
+      }, 10);
+    }
+  }
+
+  function _hideHowToPlay() {
+    var m = document.getElementById("howToPlayModal");
+    if (m) {
+      m.classList.remove("active");
+      setTimeout(function () {
+        m.style.display = "none";
+      }, 300);
+    }
   }
 
   function initParticles() {

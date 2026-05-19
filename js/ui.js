@@ -36,11 +36,9 @@ var UI = (function () {
     }
     if (id === "screen-result") {
       var rsEl = document.getElementById("rematchStatus");
-      if (rsEl) rsEl.style.display = "none";
-      var btnPlay = document.getElementById("btnPlayAgain");
-      if (btnPlay) {
-        btnPlay.disabled = false;
-        btnPlay.textContent = "MAIN LAGI";
+      if (rsEl) {
+        rsEl.style.display = "none";
+        rsEl.textContent = "";
       }
     }
   }
@@ -81,8 +79,7 @@ var UI = (function () {
         '">' +
         '<i class="' +
         a.icon +
-        '"></i>' +
-        "</div>"
+        '"></i></div>'
       );
     }).join("");
     _makeSel(grid, "avatar-item");
@@ -186,7 +183,11 @@ var UI = (function () {
     var score = opts.score;
     var mpWinner = opts.mpWinner || null;
     var mpPlayers = opts.mpPlayers || null;
-    var isMultiplayer = !!(mpWinner || (mpPlayers && mpPlayers.length > 0));
+    var isMultiplayer = !!(
+      mpWinner !== undefined &&
+      mpPlayers &&
+      mpPlayers.length > 0
+    );
 
     var rank = "F";
     if (accuracy >= 90 && wpm >= 45) rank = "S";
@@ -281,14 +282,12 @@ var UI = (function () {
               "</div>" +
               '<div class="rank-wpm">' +
               wpmStr +
-              "</div>" +
-              "</div>" +
+              "</div></div>" +
               '<div class="rank-hp ' +
               hpCls +
               '">' +
               hp +
-              " HP</div>" +
-              "</div>"
+              " HP</div></div>"
             );
           })
           .join("");
@@ -297,27 +296,31 @@ var UI = (function () {
           '<div class="rank-box"><div class="rank-box-ttl bb">BATTLE RANKING</div>' +
           rows +
           "</div>" +
-          '<div class="rematch-vote-box" id="rematchVoteBox">' +
-          '<div class="rematch-vote-lbl bb">MAIN LAGI?</div>' +
-          '<div class="rematch-vote-btns" id="rematchVoteBtns">' +
-          '<button class="btn bb" id="btnVoteAccept" style="min-width:130px;padding:16px 24px;font-size:16px;touch-action:manipulation;cursor:pointer;"><i class="fa-solid fa-check"></i> ACCEPT</button>' +
-          '<button class="btn btn-red bb" id="btnVoteDecline" style="min-width:130px;padding:16px 24px;font-size:16px;touch-action:manipulation;cursor:pointer;"><i class="fa-solid fa-xmark"></i> DECLINE</button>' +
+          '<div class="rematch-vote-box" id="rematchVoteBox" style="margin-top:18px;">' +
+          '<div class="rematch-vote-lbl bb" style="font-size:15px;margin-bottom:12px;">MAIN LAGI?</div>' +
+          '<div class="rematch-vote-btns" id="rematchVoteBtns" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">' +
+          '<button class="btn bb" id="btnVoteAccept" style="min-width:140px;padding:18px 28px;font-size:17px;touch-action:manipulation;cursor:pointer;"><i class="fa-solid fa-check"></i> ACCEPT</button>' +
+          '<button class="btn btn-red bb" id="btnVoteDecline" style="min-width:140px;padding:18px 28px;font-size:17px;touch-action:manipulation;cursor:pointer;"><i class="fa-solid fa-xmark"></i> DECLINE</button>' +
           "</div>" +
-          '<div class="rematch-vote-status bb" id="rematchVoteStatus">Pilih Accept atau Decline</div>' +
+          '<div class="rematch-vote-status bb" id="rematchVoteStatus" style="margin-top:10px;font-size:14px;">Pilih Accept atau Decline</div>' +
           "</div>";
       } else {
         mpEl.innerHTML = "";
       }
     }
 
-    var btnPlayAgain = g("btnPlayAgain");
-    var btnBackToMenu = g("btnBackToMenu");
+    var btnPlay = g("btnPlayAgain");
+    var btnBack = g("btnBackToMenu");
     if (isMultiplayer) {
-      if (btnPlayAgain) btnPlayAgain.style.display = "none";
-      if (btnBackToMenu) btnBackToMenu.textContent = "KELUAR ROOM";
+      if (btnPlay) btnPlay.style.display = "none";
+      if (btnBack) btnBack.textContent = "KELUAR ROOM";
     } else {
-      if (btnPlayAgain) btnPlayAgain.style.display = "";
-      if (btnBackToMenu) btnBackToMenu.textContent = "MAIN MENU";
+      if (btnPlay) {
+        btnPlay.style.display = "";
+        btnPlay.disabled = false;
+        btnPlay.textContent = "MAIN LAGI";
+      }
+      if (btnBack) btnBack.textContent = "MAIN MENU";
     }
 
     showScreen("screen-result");
@@ -334,16 +337,16 @@ var UI = (function () {
       return votes[p.id] === false;
     }).length;
     var myVote = votes[myId];
-    var acceptBtn = document.getElementById("btnVoteAccept");
-    var declineBtn = document.getElementById("btnVoteDecline");
+    var aBtn = document.getElementById("btnVoteAccept");
+    var dBtn = document.getElementById("btnVoteDecline");
     if (myVote !== undefined) {
-      if (acceptBtn) {
-        acceptBtn.disabled = true;
-        acceptBtn.style.opacity = myVote === true ? "1" : "0.4";
+      if (aBtn) {
+        aBtn.disabled = true;
+        aBtn.style.opacity = myVote === true ? "1" : "0.4";
       }
-      if (declineBtn) {
-        declineBtn.disabled = true;
-        declineBtn.style.opacity = myVote === false ? "1" : "0.4";
+      if (dBtn) {
+        dBtn.disabled = true;
+        dBtn.style.opacity = myVote === false ? "1" : "0.4";
       }
     }
     if (declineCount > 0) {
@@ -378,11 +381,11 @@ function buildMobileKeyboard() {
     .map(function (row, ri) {
       var back =
         ri === 2
-          ? '<button class="key-btn key-back bb" data-key="BACK" style="touch-action:manipulation;min-width:44px;min-height:48px;font-size:18px;">&#8592;</button>'
+          ? '<button class="key-btn key-back bb" data-key="BACK" style="touch-action:manipulation;min-width:48px;min-height:52px;font-size:20px;padding:8px;">&#8592;</button>'
           : "";
       var space =
         ri === 2
-          ? '<button class="key-btn key-space bb" data-key=" " style="touch-action:manipulation;min-width:60px;min-height:48px;font-size:14px;">SPC</button>'
+          ? '<button class="key-btn key-space bb" data-key=" " style="touch-action:manipulation;min-width:64px;min-height:52px;font-size:15px;padding:8px;">SPC</button>'
           : "";
       var keys = row
         .split("")
@@ -390,7 +393,7 @@ function buildMobileKeyboard() {
           return (
             '<button class="key-btn bb" data-key="' +
             c +
-            '" style="touch-action:manipulation;min-height:48px;font-size:18px;">' +
+            '" style="touch-action:manipulation;min-height:52px;min-width:32px;font-size:18px;padding:6px 2px;">' +
             c +
             "</button>"
           );
