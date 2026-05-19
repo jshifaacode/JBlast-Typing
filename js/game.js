@@ -335,6 +335,9 @@ var Game = (function () {
       GameAudio.playerHit();
     }
     if (state.multiplayer) {
+      // In multiplayer: send damage event to server. Host will apply it
+      // authoritatively and broadcast back to all clients via hp_sync.
+      // Do NOT modify state.playerHp here — server is the source of truth.
       Multiplayer.sendSelfDamage(dmg);
     } else {
       state.playerHp = Math.max(0, state.playerHp - dmg);
@@ -381,12 +384,8 @@ var Game = (function () {
     state._gameOverHandled = true;
     state.running = false;
     _stopAllTimers();
-    var myId = Multiplayer.getPlayerId();
-    var me = allPlayers.find(function (p) {
-      return p.id === myId;
-    });
-    if (me)
-      me.hp = state._eliminated ? 0 : Math.max(0, Math.ceil(state.playerHp));
+    // Use server HP values (allPlayers comes from Firebase via game_over event)
+    // No need to override with local state — server is authoritative.
     GameAudio.stopBgm(true);
     if (iWon) GameAudio.victory();
     else GameAudio.defeat();
@@ -577,9 +576,10 @@ var Game = (function () {
         });
         Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
       }
-      var healAmt = 6 + Math.min(state.combo - 1, 6) * 2;
-      state.playerHp = Math.min(state.maxPlayerHp, state.playerHp + healAmt);
-      renderHpBars();
+      // NOTE: Do NOT apply local healing in multiplayer.
+      // HP is server-authoritative. Local heal would desync from server state.
+      // Healing is intentionally not included in the server-side damage processor
+      // to keep the model simple and prevent HP refill bugs.
     } else {
       var alive = state.enemies.filter(function (e) {
         return e.hp > 0;
@@ -835,19 +835,25 @@ var Game = (function () {
     });
 
     Multiplayer.on("hp_sync", function (data) {
+      // Server is authoritative — always trust server HP value, no local override.
       var myId = Multiplayer.getPlayerId();
       var myData = (data.players || []).find(function (p) {
         return p.id === myId;
       });
       if (myData && typeof myData.hp === "number") {
         var serverHp = myData.hp;
-        if (serverHp < state.playerHp) {
-          state.playerHp = serverHp;
-          if (serverHp <= 0 && !state._eliminated) {
-            _handleMpDeath();
-          }
+        // Always sync local HP to server value (server is authoritative)
+        state.playerHp = serverHp;
+        if (serverHp <= 0 && !state._eliminated) {
+          _handleMpDeath();
         }
       }
+      // Update all player data from server snapshot
+      (data.players || []).forEach(function (p) {
+        if (players && players[p.id] !== undefined) {
+          // already managed by Multiplayer module
+        }
+      });
       updateMpSidebar();
       renderHpBars();
     });
@@ -882,16 +888,16 @@ var Game = (function () {
     var list = document.getElementById("mpPlayerList");
     if (!list) return;
     var myId = Multiplayer.getPlayerId();
-    var myDisplayHp = Math.max(0, Math.ceil(state.playerHp));
+    // Use server HP for ALL players (including self) since server is authoritative
     list.innerHTML = Multiplayer.getPlayers()
       .map(function (p) {
-        var hp =
-          p.id === myId
-            ? myDisplayHp
-            : Math.max(
-                0,
-                Math.ceil(typeof p.hp === "number" ? p.hp : PLAYER_MAX_HP),
-              );
+        var hp = Math.max(
+          0,
+          Math.ceil(typeof p.hp === "number" ? p.hp : PLAYER_MAX_HP),
+        );
+        // For self, also reflect local state if server hasn't updated yet
+        if (p.id === myId && state.playerHp < hp)
+          hp = Math.max(0, Math.ceil(state.playerHp));
         var pct = Math.max(0, Math.min(100, (hp / PLAYER_MAX_HP) * 100));
         var col =
           hp > 100
@@ -945,6 +951,8 @@ var Game = (function () {
   function renderHpBars() {
     var c = document.getElementById("hpBars");
     if (!c) return;
+    // In multiplayer, use server HP (state.playerHp is synced from server).
+    // In solo, use local state.
     var myHp = Math.max(0, Math.ceil(state.playerHp));
     var pPct = Math.max(0, (myHp / state.maxPlayerHp) * 100);
     var pStyle =

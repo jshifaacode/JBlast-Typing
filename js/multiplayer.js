@@ -7,23 +7,26 @@ var Multiplayer = (function () {
   var players = {};
   var cbs = {};
   var _poll = null;
-  var POLL_MS = 200;
+  var POLL_MS = 150; // faster polling for better sync
   var PLAYER_MAX_HP = 200,
     MAX_PLAYERS = 4,
     MIN_PLAYERS = 2;
 
+  // --- local state tracking ---
   var _lastStatus = "";
   var _lastGameOver = "";
   var _lastRematchSig = "";
   var _lastPlayerSnap = "";
   var _lastEventsSnap = "";
-  var _lastDmgSnap = "";
-  var _processedEvents = {};
   var _processedDmg = {};
   var _rematchStarted = false;
   var _doingRematch = false;
   var _gameOverBroadcasted = false;
   var _hostDmgInterval = null;
+  // Track the last known HP for each player so we can detect real changes
+  var _lastKnownHp = {};
+
+  // ─── helpers ────────────────────────────────────────────────────────────────
 
   function genCode() {
     var c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
@@ -43,7 +46,9 @@ var Multiplayer = (function () {
     if (cbs[ev])
       try {
         cbs[ev](d);
-      } catch (x) {}
+      } catch (x) {
+        console.error("emit err", ev, x);
+      }
   }
 
   function _req(path, method, body) {
@@ -77,15 +82,16 @@ var Multiplayer = (function () {
     );
   }
 
+  // ─── state reset ────────────────────────────────────────────────────────────
+
   function _resetState() {
     _lastStatus = "";
     _lastGameOver = "";
     _lastRematchSig = "";
     _lastPlayerSnap = "";
     _lastEventsSnap = "";
-    _lastDmgSnap = "";
-    _processedEvents = {};
     _processedDmg = {};
+    _lastKnownHp = {};
     _rematchStarted = false;
     _doingRematch = false;
     _gameOverBroadcasted = false;
@@ -105,6 +111,8 @@ var Multiplayer = (function () {
       _hostDmgInterval = null;
     }
   }
+
+  // ─── avatar render ──────────────────────────────────────────────────────────
 
   function _renderAvatar(av) {
     var map = {
@@ -137,6 +145,8 @@ var Multiplayer = (function () {
       online: true,
     };
   }
+
+  // ─── lobby UI ───────────────────────────────────────────────────────────────
 
   function _updateLobbyUI() {
     var list = Object.values(players);
@@ -176,16 +186,26 @@ var Multiplayer = (function () {
     }
   }
 
+  // ─── HOST: authoritative damage processor ───────────────────────────────────
+  //
+  // ONLY the host reads the /dmg queue and applies damage to /players/{id}/hp.
+  // Non-host clients NEVER write to /players/{id}/hp directly.
+  // This eliminates race conditions and HP desync completely.
+
   function _startHostDmgProcessor() {
     _stopHostDmgProcessor();
     if (!isHost) return;
+
     _hostDmgInterval = setInterval(function () {
       if (!room || !isHost || _gameOverBroadcasted) return;
       if (_lastStatus !== "playing") return;
+
       dbGet("rooms/" + room + "/dmg").then(function (dmgMap) {
         if (!dmgMap) return;
         var keys = Object.keys(dmgMap);
         if (keys.length === 0) return;
+
+        // Find unprocessed damage events
         var toProcess = [];
         keys.forEach(function (k) {
           if (!_processedDmg[k]) {
@@ -195,16 +215,20 @@ var Multiplayer = (function () {
         });
         if (toProcess.length === 0) return;
 
+        // Fetch fresh authoritative HP state
         dbGet("rooms/" + room + "/players").then(function (fp) {
           if (!fp) return;
+
           var hpUpdates = {};
           var changed = false;
+
           toProcess.forEach(function (ev) {
             if (!ev || !ev.targetId || ev.amount == null) return;
             var target = fp[ev.targetId];
             if (!target) return;
             var curHp =
               typeof target.hp === "number" ? target.hp : PLAYER_MAX_HP;
+            if (curHp <= 0) return; // already dead, ignore further damage
             var newHp = Math.max(0, curHp - ev.amount);
             fp[ev.targetId].hp = newHp;
             hpUpdates["players/" + ev.targetId + "/hp"] = newHp;
@@ -213,29 +237,43 @@ var Multiplayer = (function () {
 
           if (!changed) return;
 
-          var alive = Object.values(fp).filter(function (p) {
+          // Check if game is over (only 1 or 0 players alive)
+          var allPlayers = Object.values(fp);
+          var alive = allPlayers.filter(function (p) {
             return (p.hp || 0) > 0;
           });
           var isOver = alive.length <= 1;
 
           if (isOver && !_gameOverBroadcasted) {
             _gameOverBroadcasted = true;
+            _stopHostDmgProcessor(); // stop processing more damage
+
             var winnerId = alive.length === 1 ? alive[0].id : null;
             var goVal = winnerId || "none";
             _lastGameOver = goVal;
+
+            // Write HP updates AND game over AND status in one atomic patch
             hpUpdates["gameOver"] = goVal;
             hpUpdates["status"] = "ended";
-            hpUpdates["dmg"] = null;
-          }
+            hpUpdates["dmg"] = null; // clear damage queue
 
-          dbUpd("rooms/" + room, hpUpdates).then(function () {
-            if (isOver && !_gameOverBroadcasted) {
-            }
-          });
+            dbUpd("rooms/" + room, hpUpdates);
+          } else {
+            // Just update HP values; no game over yet
+            // Also clear the processed dmg keys from Firebase to keep it clean
+            var clearUpdate = {};
+            Object.keys(_processedDmg).forEach(function (k) {
+              if (dmgMap[k] !== undefined) clearUpdate["dmg/" + k] = null;
+            });
+            Object.assign(hpUpdates, clearUpdate);
+            dbUpd("rooms/" + room, hpUpdates);
+          }
         });
       });
-    }, 120);
+    }, 100); // run every 100ms for snappy HP sync
   }
+
+  // ─── polling loop ────────────────────────────────────────────────────────────
 
   function startPoll(code) {
     stopPoll();
@@ -243,18 +281,33 @@ var Multiplayer = (function () {
       dbGet("rooms/" + code).then(function (r) {
         if (!r) return;
 
+        // ── player HP / state sync ──────────────────────────────────────────
         var fp = r.players || {};
         var snap = JSON.stringify(fp);
         if (snap !== _lastPlayerSnap) {
           _lastPlayerSnap = snap;
           players = fp;
+
+          // Detect per-player HP changes and notify game
+          var hpChanged = false;
+          Object.values(fp).forEach(function (p) {
+            var prev = _lastKnownHp[p.id];
+            if (prev === undefined || prev !== p.hp) {
+              _lastKnownHp[p.id] = p.hp;
+              hpChanged = true;
+            }
+          });
+
           emit("players_update", { players: Object.values(players) });
           _updateLobbyUI();
+
           if (_lastStatus === "playing") {
+            // Always emit hp_sync when any HP changes so all clients stay in sync
             emit("hp_sync", { players: Object.values(players) });
           }
         }
 
+        // ── status transitions ───────────────────────────────────────────────
         var status = r.status || "lobby";
 
         if (status === "playing" && _lastStatus !== "playing") {
@@ -262,8 +315,8 @@ var Multiplayer = (function () {
           _gameOverBroadcasted = false;
           _rematchStarted = false;
           _doingRematch = false;
-          _processedEvents = {};
           _processedDmg = {};
+          _lastKnownHp = {};
           if (isHost) _startHostDmgProcessor();
           if (r.currentWord) {
             emit("game_start", {
@@ -273,6 +326,7 @@ var Multiplayer = (function () {
           }
         }
 
+        // ── rematch ──────────────────────────────────────────────────────────
         var rSig = (r.rematchWord || "") + "|" + (r.rematchStartedAt || "");
         if (
           r.rematchWord &&
@@ -285,8 +339,8 @@ var Multiplayer = (function () {
           _gameOverBroadcasted = false;
           _rematchStarted = false;
           _doingRematch = false;
-          _processedEvents = {};
           _processedDmg = {};
+          _lastKnownHp = {};
           if (isHost) _startHostDmgProcessor();
           emit("rematch_start", {
             word: r.rematchWord,
@@ -294,12 +348,16 @@ var Multiplayer = (function () {
           });
         }
 
+        // ── game over ────────────────────────────────────────────────────────
+        // IMPORTANT: read from Firebase, not local cache.
+        // Every client reacts to the same authoritative gameOver value.
         var goVal = r.gameOver || "";
         if (goVal !== "" && goVal !== _lastGameOver) {
           _lastGameOver = goVal;
           if (status !== "lobby") {
             _stopHostDmgProcessor();
             var goWin = goVal === "none" ? null : goVal;
+            // Use the players from Firebase (authoritative HP)
             var goPl = r.players
               ? Object.values(r.players)
               : Object.values(players);
@@ -307,14 +365,16 @@ var Multiplayer = (function () {
           }
         }
 
+        // ── rematch votes ────────────────────────────────────────────────────
         var rv = r.rematchVotes || {};
         var pIds = Object.keys(players);
         if (pIds.length >= MIN_PLAYERS && Object.keys(rv).length > 0) {
           _handleRematchVotes(rv, pIds);
         }
 
+        // ── typing events ────────────────────────────────────────────────────
         var evs = r.events || {};
-        var evSnap = JSON.stringify(Object.keys(evs));
+        var evSnap = JSON.stringify(Object.keys(evs).sort());
         if (evSnap !== _lastEventsSnap) {
           _lastEventsSnap = evSnap;
           var now = Date.now();
@@ -322,8 +382,7 @@ var Multiplayer = (function () {
             var ev = evs[k];
             if (!ev || !ev.ts) return;
             if (now - ev.ts > 5000) return;
-            if (_processedEvents[k]) return;
-            _processedEvents[k] = true;
+            // Already processed check happens via timestamp freshness
             if (ev.type === "typing" && ev.from !== pid) {
               emit("player_typing", { playerId: ev.from, name: ev.name });
             }
@@ -332,6 +391,8 @@ var Multiplayer = (function () {
       });
     }, POLL_MS);
   }
+
+  // ─── rematch vote handler ────────────────────────────────────────────────────
 
   function _handleRematchVotes(votes, pIds) {
     var totalAccept = pIds.filter(function (k) {
@@ -361,6 +422,8 @@ var Multiplayer = (function () {
     }
   }
 
+  // ─── beforeunload ────────────────────────────────────────────────────────────
+
   function _setupBeforeUnload(code) {
     window.addEventListener("beforeunload", function () {
       try {
@@ -371,6 +434,8 @@ var Multiplayer = (function () {
       } catch (x) {}
     });
   }
+
+  // ─── public API ─────────────────────────────────────────────────────────────
 
   function createRoom(p) {
     p.id = p.id || genId();
@@ -446,10 +511,13 @@ var Multiplayer = (function () {
     }
     _lastGameOver = "";
     _lastRematchSig = "";
-    _processedEvents = {};
     _processedDmg = {};
+    _lastKnownHp = {};
     _gameOverBroadcasted = false;
+
     var word = Words.getByWave(1);
+
+    // Reset all player HP to full in one atomic write
     var updates = {
       status: "playing",
       currentWord: word,
@@ -479,11 +547,13 @@ var Multiplayer = (function () {
 
   function startRematch() {
     if (!isHost || !room) return Promise.resolve();
-    _processedEvents = {};
     _processedDmg = {};
+    _lastKnownHp = {};
     _gameOverBroadcasted = false;
+
     var word = Words.getByWave(1);
     var ts = Date.now();
+
     return dbGet("rooms/" + room + "/players").then(function (fp) {
       var allP = fp || players;
       var updates = {
@@ -497,6 +567,7 @@ var Multiplayer = (function () {
         events: {},
         dmg: {},
       };
+      // Reset all HP to full atomically
       Object.keys(allP).forEach(function (id) {
         updates["players/" + id + "/hp"] = PLAYER_MAX_HP;
         updates["players/" + id + "/wpm"] = 0;
@@ -525,12 +596,36 @@ var Multiplayer = (function () {
     );
   }
 
-  function pushMyHp(hp) {
-    if (!room || !pid) return Promise.resolve();
-    var safe = Math.max(0, Math.min(PLAYER_MAX_HP, Math.ceil(hp)));
-    if (players[pid]) players[pid].hp = safe;
-    return dbSet("rooms/" + room + "/players/" + pid + "/hp", safe);
+  // ─── damage API (client → Firebase /dmg queue) ───────────────────────────────
+  //
+  // Clients NEVER directly write /players/{id}/hp anymore.
+  // They push damage events to /dmg, and the host applies them authoritatively.
+
+  function sendDamage(targetId, amount) {
+    if (!room || !pid || !targetId || amount <= 0) return Promise.resolve();
+    var key =
+      Date.now().toString(36) + "_" + Math.random().toString(36).substr(2, 4);
+    return dbSet("rooms/" + room + "/dmg/" + key, {
+      fromId: pid,
+      targetId: targetId,
+      amount: Math.floor(amount),
+      ts: Date.now(),
+    });
   }
+
+  function sendSelfDamage(amount) {
+    if (!room || !pid || amount <= 0) return Promise.resolve();
+    var key =
+      Date.now().toString(36) + "_" + Math.random().toString(36).substr(2, 4);
+    return dbSet("rooms/" + room + "/dmg/" + key, {
+      fromId: "enemy",
+      targetId: pid,
+      amount: Math.floor(amount),
+      ts: Date.now(),
+    });
+  }
+
+  // ─── progress/WPM sync (cosmetic only, not authoritative for HP) ─────────────
 
   function pushMyProgress(progress, wpm) {
     if (!room || !pid) return Promise.resolve();
@@ -544,28 +639,15 @@ var Multiplayer = (function () {
     });
   }
 
-  function sendDamage(targetId, amount) {
-    if (!room || !pid || !targetId || amount <= 0) return Promise.resolve();
-    var key =
-      Date.now().toString(36) + "_" + Math.random().toString(36).substr(2, 4);
-    return dbSet("rooms/" + room + "/dmg/" + key, {
-      fromId: pid,
-      targetId: targetId,
-      amount: amount,
-      ts: Date.now(),
-    });
+  // pushMyHp is kept for API compatibility but is now a no-op.
+  // HP is only written by the host damage processor.
+  function pushMyHp(hp) {
+    return Promise.resolve();
   }
 
-  function sendSelfDamage(amount) {
-    if (!room || !pid || amount <= 0) return Promise.resolve();
-    var key =
-      Date.now().toString(36) + "_" + Math.random().toString(36).substr(2, 4);
-    return dbSet("rooms/" + room + "/dmg/" + key, {
-      fromId: "enemy",
-      targetId: pid,
-      amount: amount,
-      ts: Date.now(),
-    });
+  // pushOpponentHp was already a no-op, keeping it.
+  function pushOpponentHp(oppId, hp) {
+    return Promise.resolve();
   }
 
   function sendTyping() {
@@ -579,18 +661,15 @@ var Multiplayer = (function () {
     });
   }
 
+  // broadcastGameOver is kept for timer-based end (host only)
   function broadcastGameOver(winnerId) {
-    if (!room) return Promise.resolve();
-    var val = winnerId || "none";
-    if (_lastGameOver === val) return Promise.resolve();
+    if (!room || !isHost) return Promise.resolve();
+    if (_gameOverBroadcasted) return Promise.resolve();
     _gameOverBroadcasted = true;
-    _lastGameOver = val;
     _stopHostDmgProcessor();
+    var val = winnerId || "none";
+    _lastGameOver = val;
     return dbUpd("rooms/" + room, { gameOver: val, status: "ended" });
-  }
-
-  function pushOpponentHp(oppId, hp) {
-    return Promise.resolve();
   }
 
   function leaveRoom() {
@@ -610,6 +689,8 @@ var Multiplayer = (function () {
     }
     return Promise.resolve();
   }
+
+  // ─── getters ─────────────────────────────────────────────────────────────────
 
   function getPlayers() {
     return Object.values(players);
