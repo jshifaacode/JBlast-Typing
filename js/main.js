@@ -310,7 +310,14 @@ var App = (function () {
       btn.style.pointerEvents = "none";
       btn.textContent = "STARTING...";
     }
-    Multiplayer.startGame();
+    // Host directly starts the game after Firebase write completes.
+    // Cannot rely on polling emit game_start for host because _lastStatus
+    // is already "playing" inside startGame(), so the status-change
+    // condition in polling is never true for host -> host stuck in lobby.
+    Multiplayer.startGame().then(function () {
+      var word = Multiplayer._currentWord || null;
+      startMpGame(word);
+    });
   }
 
   function _handleVoteAccept() {

@@ -417,7 +417,15 @@ var Multiplayer = (function () {
       _doingRematch = true;
       _rematchStarted = true;
       dbUpd("rooms/" + room, { rematchVotes: null }).then(function () {
-        startRematch();
+        startRematch().then(function () {
+          // Host directly starts rematch game, same as startGame fix.
+          // Polling won't emit rematch_start for host because _lastRematchSig
+          // is pre-set inside startRematch(), blocking the condition.
+          emit("rematch_start", {
+            word: Multiplayer._currentWord,
+            players: Object.values(players),
+          });
+        });
       });
     }
   }
@@ -516,6 +524,7 @@ var Multiplayer = (function () {
     _gameOverBroadcasted = false;
 
     var word = Words.getByWave(1);
+    Multiplayer._currentWord = word;
 
     // Reset all player HP to full in one atomic write
     var updates = {
@@ -552,6 +561,7 @@ var Multiplayer = (function () {
     _gameOverBroadcasted = false;
 
     var word = Words.getByWave(1);
+    Multiplayer._currentWord = word;
     var ts = Date.now();
 
     return dbGet("rooms/" + room + "/players").then(function (fp) {
