@@ -8,6 +8,7 @@ var App = (function () {
   var _listenersBound = false;
   var _leavingGame = false;
   var _bgmStarted = false;
+  var _voteBound = false;
 
   function getProfile() {
     if (!profile) {
@@ -131,7 +132,6 @@ var App = (function () {
     if (_inMpGame) return;
     _inMpGame = true;
     _leavingGame = false;
-
     var inp = document.getElementById("gameInput");
     if (inp) inp.disabled = false;
     document.querySelectorAll(".key-btn").forEach(function (b) {
@@ -145,19 +145,15 @@ var App = (function () {
       wp.style.opacity = "";
       wp.style.pointerEvents = "";
     }
-
     var p = getProfile();
     UI.showScreen("screen-game");
     _setupGameScreen();
-
     if (!GameAudio.isMuted() && !GameAudio.isPlaying()) {
       _bgmStarted = true;
       GameAudio.playBgm();
     }
-
     Game.init("multiplayer", p.skin, firstWord);
     Game.setupMultiplayer();
-
     setTimeout(function () {
       _inMpGame = false;
     }, 3000);
@@ -348,12 +344,24 @@ var App = (function () {
   }
 
   function _bindVoteButtons() {
+    if (_voteBound) return;
+    _voteBound = true;
     document.addEventListener("click", function (e) {
       if (!_inMpSession) return;
-      if (e.target.closest("#btnVoteAccept")) {
+      var acc = e.target.closest
+        ? e.target.closest("#btnVoteAccept")
+        : e.target.id === "btnVoteAccept"
+          ? e.target
+          : null;
+      var dec = e.target.closest
+        ? e.target.closest("#btnVoteDecline")
+        : e.target.id === "btnVoteDecline"
+          ? e.target
+          : null;
+      if (acc) {
         e.preventDefault();
         _handleVoteAccept();
-      } else if (e.target.closest("#btnVoteDecline")) {
+      } else if (dec) {
         e.preventDefault();
         _handleVoteDecline();
       }
@@ -362,10 +370,20 @@ var App = (function () {
       "touchend",
       function (e) {
         if (!_inMpSession) return;
-        if (e.target.closest("#btnVoteAccept")) {
+        var acc = e.target.closest
+          ? e.target.closest("#btnVoteAccept")
+          : e.target.id === "btnVoteAccept"
+            ? e.target
+            : null;
+        var dec = e.target.closest
+          ? e.target.closest("#btnVoteDecline")
+          : e.target.id === "btnVoteDecline"
+            ? e.target
+            : null;
+        if (acc) {
           e.preventDefault();
           _handleVoteAccept();
-        } else if (e.target.closest("#btnVoteDecline")) {
+        } else if (dec) {
           e.preventDefault();
           _handleVoteDecline();
         }
@@ -453,7 +471,6 @@ var App = (function () {
       UI.buildStats(p.stats || {});
       UI.showScreen("screen-stats");
     });
-
     addTap("btnBackFromMP", function () {
       UI.showScreen("screen-menu");
     });
