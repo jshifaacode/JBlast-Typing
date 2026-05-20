@@ -148,11 +148,9 @@ var App = (function () {
     var p = getProfile();
     UI.showScreen("screen-game");
     _setupGameScreen();
-    if (!GameAudio.isMuted()) {
-      if (!GameAudio.isPlaying()) {
-        _bgmStarted = true;
-        GameAudio.playBgm();
-      }
+    if (!GameAudio.isMuted() && !GameAudio.isPlaying()) {
+      _bgmStarted = true;
+      GameAudio.playBgm();
     }
     Game.init("multiplayer", p.skin, firstWord);
     Game.setupMultiplayer();
@@ -208,13 +206,19 @@ var App = (function () {
       UI.updateVoteDisplay(data.voteMap || {}, players, myId);
       var rsEl = document.getElementById("rematchStatus");
       if (rsEl) {
-        if (data.votes >= data.total && data.total >= 2) {
+        if (data.hasDecline) {
+          rsEl.style.display = "block";
+          rsEl.textContent = "Ada yang decline — kembali ke menu...";
+          rsEl.style.color = "var(--r)";
+        } else if (data.votes >= data.total && data.total >= 2) {
           rsEl.style.display = "block";
           rsEl.textContent = "Semua setuju! Memulai rematch...";
+          rsEl.style.color = "var(--g)";
         } else if (data.votes > 0) {
           rsEl.style.display = "block";
           rsEl.textContent =
             "Voting: " + data.votes + "/" + data.total + " pemain siap...";
+          rsEl.style.color = "var(--c)";
         } else {
           rsEl.style.display = "none";
         }
@@ -310,14 +314,7 @@ var App = (function () {
       btn.style.pointerEvents = "none";
       btn.textContent = "STARTING...";
     }
-    Multiplayer.startGame().then(function () {
-      if (_inMpSession && !_leavingGame) {
-        var word = Multiplayer.getCurrentWord
-          ? Multiplayer.getCurrentWord()
-          : null;
-        startMpGame(word);
-      }
-    });
+    Multiplayer.startGame();
   }
 
   function _handleVoteAccept() {
@@ -356,25 +353,23 @@ var App = (function () {
   function _bindVoteButtons() {
     if (_voteBound) return;
     _voteBound = true;
-    document.addEventListener("click", function (e) {
+    function handleVote(target) {
       if (!_inMpSession) return;
-      var acc = e.target.closest
-        ? e.target.closest("#btnVoteAccept")
-        : e.target.id === "btnVoteAccept"
-          ? e.target
+      var acc = target.closest
+        ? target.closest("#btnVoteAccept")
+        : target.id === "btnVoteAccept"
+          ? target
           : null;
-      var dec = e.target.closest
-        ? e.target.closest("#btnVoteDecline")
-        : e.target.id === "btnVoteDecline"
-          ? e.target
+      var dec = target.closest
+        ? target.closest("#btnVoteDecline")
+        : target.id === "btnVoteDecline"
+          ? target
           : null;
-      if (acc) {
-        e.preventDefault();
-        _handleVoteAccept();
-      } else if (dec) {
-        e.preventDefault();
-        _handleVoteDecline();
-      }
+      if (acc) _handleVoteAccept();
+      else if (dec) _handleVoteDecline();
+    }
+    document.addEventListener("click", function (e) {
+      handleVote(e.target);
     });
     document.addEventListener(
       "touchend",
@@ -481,6 +476,7 @@ var App = (function () {
       UI.buildStats(p.stats || {});
       UI.showScreen("screen-stats");
     });
+
     addTap("btnBackFromMP", function () {
       UI.showScreen("screen-menu");
     });

@@ -30,12 +30,13 @@ var Game = (function () {
     _eliminated: false,
     _endingMp: false,
     _gameOverHandled: false,
-    _pendingDmgThrottle: null,
-    _pendingDmgQueue: [],
+    _lastHpPushed: 200,
+    _hpPushTimer: null,
   };
 
   var PLAYER_MAX_HP = 200;
   var MP_DURATION = 300;
+  var HP_PUSH_THROTTLE = 120;
 
   var ENEMIES = [
     {
@@ -104,9 +105,9 @@ var Game = (function () {
     state._eliminated = false;
     state._endingMp = false;
     state._gameOverHandled = false;
-    state._pendingDmgQueue = [];
-    clearTimeout(state._pendingDmgThrottle);
-    state._pendingDmgThrottle = null;
+    state._lastHpPushed = PLAYER_MAX_HP;
+    clearTimeout(state._hpPushTimer);
+    state._hpPushTimer = null;
     clearInterval(state.timerInterval);
     state.timerInterval = null;
   }
@@ -114,9 +115,8 @@ var Game = (function () {
   function _stopAllTimers() {
     clearInterval(state.timerInterval);
     state.timerInterval = null;
-    clearTimeout(state._pendingDmgThrottle);
-    state._pendingDmgThrottle = null;
-    state._pendingDmgQueue = [];
+    clearTimeout(state._hpPushTimer);
+    state._hpPushTimer = null;
     state.enemies.forEach(function (e) {
       clearTimeout(e.attackTimer);
       if (e.burnTick) clearInterval(e.burnTick);
@@ -330,30 +330,29 @@ var Game = (function () {
 
   function _applyDamageToSelf(dmg, fromEnemy) {
     if (!state.running && !state._eliminated) return;
+    state.playerHp = Math.max(0, state.playerHp - dmg);
+    renderHpBars();
     if (fromEnemy) {
       Effects.damageFlash();
       GameAudio.playerHit();
     }
-    if (state.multiplayer) {
-      // Update local HP immediately for responsive UI
-      // Server will confirm via hp_sync (and may correct if different)
-      state.playerHp = Math.max(0, state.playerHp - dmg);
-      renderHpBars();
-      Multiplayer.sendSelfDamage(dmg);
-      // Don't call endGame here — wait for server hp_sync to confirm death
-    } else {
-      state.playerHp = Math.max(0, state.playerHp - dmg);
-      renderHpBars();
-      if (state.playerHp <= 0 && !state._eliminated) {
-        endGame(false);
-      }
+    _schedulePushHp();
+    if (state.playerHp <= 0 && !state._eliminated) {
+      if (state.multiplayer) _handleMpDeath();
+      else endGame(false);
     }
   }
 
   function _schedulePushHp() {
     if (!state.multiplayer) return;
-    var hp = Math.max(0, Math.ceil(state.playerHp));
-    Multiplayer.pushMyHp(hp);
+    clearTimeout(state._hpPushTimer);
+    state._hpPushTimer = setTimeout(function () {
+      var hp = Math.max(0, Math.ceil(state.playerHp));
+      if (hp !== state._lastHpPushed) {
+        state._lastHpPushed = hp;
+        Multiplayer.pushMyHp(hp);
+      }
+    }, HP_PUSH_THROTTLE);
   }
 
   function _handleMpDeath() {
@@ -377,7 +376,22 @@ var Game = (function () {
       wp.style.opacity = "0.3";
       wp.style.pointerEvents = "none";
     }
-    Effects.showToast("KAU GUGUR! Menunggu hasil akhir...", "error", 3000);
+    state._lastHpPushed = 0;
+    Multiplayer.pushMyHp(0).then(function () {
+      if (Multiplayer.getIsHost()) {
+        var allPl = Multiplayer.getPlayers();
+        var myId = Multiplayer.getPlayerId();
+        var alive = allPl.filter(function (p) {
+          return p.id !== myId && (p.hp || 0) > 0;
+        });
+        if (alive.length <= 0) {
+          Multiplayer.broadcastGameOver(null);
+        } else if (alive.length === 1 && allPl.length === 2) {
+          Multiplayer.broadcastGameOver(alive[0].id);
+        }
+      }
+    });
+    Effects.showToast("KAU GUGUR! Menunggu hasil akhir...", "error", 4000);
   }
 
   function _finishMp(iWon, winnerId, allPlayers) {
@@ -524,7 +538,7 @@ var Game = (function () {
           state.typedIndex / state.currentWord.length,
           calcWpm(),
         );
-        Multiplayer.sendTyping();
+        if (state.typedIndex % 3 === 0) Multiplayer.sendTyping();
       }
       if (state.typedIndex >= state.currentWord.length)
         setTimeout(onWordDone, 0);
@@ -568,7 +582,6 @@ var Game = (function () {
     if (state.wordCount % 3 === 0) unlockSkill();
     var mult = state.skills.overdrive.active ? 2 : 1;
     var comboDmg = Math.min(state.combo, 12) * 2;
-    var baseDmg = 20 + comboDmg;
 
     if (state.multiplayer) {
       var myId = Multiplayer.getPlayerId();
@@ -578,14 +591,21 @@ var Game = (function () {
       if (opponents.length > 0) {
         var oppDmg = Math.floor((18 + comboDmg) * mult);
         opponents.forEach(function (opp) {
-          Multiplayer.sendDamage(opp.id, oppDmg);
+          var newHp = Math.max(0, (opp.hp || 0) - oppDmg);
+          opp.hp = newHp;
+          if (Multiplayer.getIsHost()) {
+            Multiplayer.pushOpponentHp(opp.id, newHp);
+          }
         });
         Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
+        renderHpBars();
       }
       var healAmt = 6 + Math.min(state.combo - 1, 6) * 2;
       state.playerHp = Math.min(state.maxPlayerHp, state.playerHp + healAmt);
       renderHpBars();
+      _schedulePushHp();
     } else {
+      var baseDmg = 20 + comboDmg;
       var alive = state.enemies.filter(function (e) {
         return e.hp > 0;
       });
@@ -812,6 +832,10 @@ var Game = (function () {
     if (Multiplayer.getIsHost()) {
       var myId = Multiplayer.getPlayerId();
       var allPl = Multiplayer.getPlayers();
+      var me = allPl.find(function (p) {
+        return p.id === myId;
+      });
+      if (me) me.hp = Math.ceil(state.playerHp);
       var sorted = allPl.slice().sort(function (a, b) {
         return (b.hp || 0) - (a.hp || 0);
       });
@@ -824,7 +848,7 @@ var Game = (function () {
     state._eliminated = false;
     state._endingMp = false;
     state._gameOverHandled = false;
-    state._pendingDmgQueue = [];
+    state._lastHpPushed = PLAYER_MAX_HP;
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "block";
 
@@ -839,19 +863,7 @@ var Game = (function () {
       _finishMp(iWon, data.winnerId, allPl);
     });
 
-    Multiplayer.on("hp_sync", function (data) {
-      var myId = Multiplayer.getPlayerId();
-      var myData = (data.players || []).find(function (p) {
-        return p.id === myId;
-      });
-      if (myData && typeof myData.hp === "number") {
-        var serverHp = myData.hp;
-        // Always trust server HP — server is authoritative
-        state.playerHp = serverHp;
-        if (serverHp <= 0 && !state._eliminated) {
-          _handleMpDeath();
-        }
-      }
+    Multiplayer.on("hp_sync", function () {
       updateMpSidebar();
       renderHpBars();
     });
