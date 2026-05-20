@@ -32,11 +32,12 @@ var Game = (function () {
     _gameOverHandled: false,
     _lastHpPushed: 200,
     _hpPushTimer: null,
+    _myHp: 200,
   };
 
   var PLAYER_MAX_HP = 200;
-  var MP_DURATION = 300;
-  var HP_PUSH_THROTTLE = 120;
+  var MP_DURATION = 120;
+  var HP_PUSH_THROTTLE = 100;
 
   var ENEMIES = [
     {
@@ -82,12 +83,27 @@ var Game = (function () {
     },
   ];
 
+  function _mpWordDifficulty() {
+    var wc = state.wordCount;
+    if (wc < 5) return "easy";
+    if (wc < 12) return "medium";
+    return "hard";
+  }
+
+  function _getMpWord() {
+    var diff = _mpWordDifficulty();
+    if (diff === "easy") return Words.getEasy();
+    if (diff === "medium") return Words.getMedium();
+    return Words.getHard();
+  }
+
   function _resetState(mode, skin, firstWord) {
     state.mode = mode;
     state.skin = skin || "default";
     state.wave = 1;
     state.score = 0;
     state.playerHp = PLAYER_MAX_HP;
+    state._myHp = PLAYER_MAX_HP;
     state.maxPlayerHp = PLAYER_MAX_HP;
     state.combo = 0;
     state.maxCombo = 0;
@@ -187,6 +203,12 @@ var Game = (function () {
     var zone = document.getElementById("enemyZone");
     if (zone) zone.innerHTML = "";
     state.enemies = [];
+
+    if (state.multiplayer) {
+      nextWord();
+      return;
+    }
+
     var waveMap = {
       1: [ENEMIES[0]],
       2: [ENEMIES[0]],
@@ -219,7 +241,7 @@ var Game = (function () {
     });
     var wd = document.getElementById("waveDisplay");
     if (wd) wd.textContent = "W" + state.wave;
-    if (state.mode === "solo") spawnBots();
+    spawnBots();
     nextWord();
   }
 
@@ -331,27 +353,26 @@ var Game = (function () {
   function _applyDamageToSelf(dmg, fromEnemy) {
     if (!state.running && !state._eliminated) return;
     state.playerHp = Math.max(0, state.playerHp - dmg);
+    state._myHp = state.playerHp;
     renderHpBars();
     if (fromEnemy) {
       Effects.damageFlash();
       GameAudio.playerHit();
     }
-    _schedulePushHp();
+    _flushMyHp();
     if (state.playerHp <= 0 && !state._eliminated) {
       if (state.multiplayer) _handleMpDeath();
       else endGame(false);
     }
   }
 
-  function _schedulePushHp() {
+  function _flushMyHp() {
     if (!state.multiplayer) return;
     clearTimeout(state._hpPushTimer);
     state._hpPushTimer = setTimeout(function () {
       var hp = Math.max(0, Math.ceil(state.playerHp));
-      if (hp !== state._lastHpPushed) {
-        state._lastHpPushed = hp;
-        Multiplayer.pushMyHp(hp);
-      }
+      state._lastHpPushed = hp;
+      Multiplayer.pushMyHp(hp);
     }, HP_PUSH_THROTTLE);
   }
 
@@ -360,6 +381,8 @@ var Game = (function () {
     state._eliminated = true;
     state.running = false;
     _stopAllTimers();
+    clearTimeout(state._hpPushTimer);
+
     var inp = document.getElementById("gameInput");
     if (inp) {
       inp.disabled = true;
@@ -376,21 +399,8 @@ var Game = (function () {
       wp.style.opacity = "0.3";
       wp.style.pointerEvents = "none";
     }
-    state._lastHpPushed = 0;
-    Multiplayer.pushMyHp(0).then(function () {
-      if (Multiplayer.getIsHost()) {
-        var allPl = Multiplayer.getPlayers();
-        var myId = Multiplayer.getPlayerId();
-        var alive = allPl.filter(function (p) {
-          return p.id !== myId && (p.hp || 0) > 0;
-        });
-        if (alive.length <= 0) {
-          Multiplayer.broadcastGameOver(null);
-        } else if (alive.length === 1 && allPl.length === 2) {
-          Multiplayer.broadcastGameOver(alive[0].id);
-        }
-      }
-    });
+
+    Multiplayer.pushMyHp(0);
     Effects.showToast("KAU GUGUR! Menunggu hasil akhir...", "error", 4000);
   }
 
@@ -400,15 +410,18 @@ var Game = (function () {
     state._gameOverHandled = true;
     state.running = false;
     _stopAllTimers();
+
     var myId = Multiplayer.getPlayerId();
     var me = allPlayers.find(function (p) {
       return p.id === myId;
     });
     if (me)
       me.hp = state._eliminated ? 0 : Math.max(0, Math.ceil(state.playerHp));
+
     GameAudio.stopBgm(true);
     if (iWon) GameAudio.victory();
     else GameAudio.defeat();
+
     setTimeout(function () {
       UI.showResult({
         victory: iWon,
@@ -419,16 +432,19 @@ var Game = (function () {
         mpWinner: winnerId,
         mpPlayers: allPlayers,
       });
-    }, 600);
+    }, 500);
   }
 
   function nextWord() {
     state._botCompleted = false;
     state._bots.forEach(clearInterval);
     state._bots = [];
+
     if (state._firstWord) {
       state.currentWord = state._firstWord;
       state._firstWord = null;
+    } else if (state.multiplayer) {
+      state.currentWord = _getMpWord();
     } else {
       var hasBoss = state.enemies.some(function (e) {
         return e.isBoss;
@@ -443,6 +459,7 @@ var Game = (function () {
         state.currentWord = Words.getByWave(state.wave);
       }
     }
+
     state.typedIndex = 0;
     renderWord();
     var inp = document.getElementById("gameInput");
@@ -580,30 +597,33 @@ var Game = (function () {
     GameAudio.comboUp(state.combo);
     updateCombo();
     if (state.wordCount % 3 === 0) unlockSkill();
+
     var mult = state.skills.overdrive.active ? 2 : 1;
     var comboDmg = Math.min(state.combo, 12) * 2;
 
     if (state.multiplayer) {
       var myId = Multiplayer.getPlayerId();
-      var opponents = Multiplayer.getPlayers().filter(function (p) {
+      var allPl = Multiplayer.getPlayers();
+      var opponents = allPl.filter(function (p) {
         return p.id !== myId && (p.hp || 0) > 0;
       });
+
       if (opponents.length > 0) {
         var oppDmg = Math.floor((18 + comboDmg) * mult);
         opponents.forEach(function (opp) {
           var newHp = Math.max(0, (opp.hp || 0) - oppDmg);
-          opp.hp = newHp;
-          if (Multiplayer.getIsHost()) {
-            Multiplayer.pushOpponentHp(opp.id, newHp);
-          }
+          Multiplayer.dealDamageToOpponent(opp.id, oppDmg);
         });
-        Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
-        renderHpBars();
+        Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1200);
       }
+
       var healAmt = 6 + Math.min(state.combo - 1, 6) * 2;
       state.playerHp = Math.min(state.maxPlayerHp, state.playerHp + healAmt);
+      state._myHp = state.playerHp;
       renderHpBars();
-      _schedulePushHp();
+      _flushMyHp();
+
+      setTimeout(nextWord, 180);
     } else {
       var baseDmg = 20 + comboDmg;
       var alive = state.enemies.filter(function (e) {
@@ -625,8 +645,8 @@ var Game = (function () {
         onWaveClear();
         return;
       }
+      setTimeout(nextWord, 180);
     }
-    setTimeout(nextWord, 180);
   }
 
   function dmgEnemy(e, amount) {
@@ -849,6 +869,7 @@ var Game = (function () {
     state._endingMp = false;
     state._gameOverHandled = false;
     state._lastHpPushed = PLAYER_MAX_HP;
+    state._myHp = PLAYER_MAX_HP;
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "block";
 
