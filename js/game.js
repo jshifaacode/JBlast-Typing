@@ -32,12 +32,11 @@ var Game = (function () {
     _gameOverHandled: false,
     _lastHpPushed: 200,
     _hpPushTimer: null,
-    _myHp: 200,
   };
 
   var PLAYER_MAX_HP = 200;
-  var MP_DURATION = 120;
-  var HP_PUSH_THROTTLE = 100;
+  var MP_DURATION = 300;
+  var HP_PUSH_THROTTLE = 120;
 
   var ENEMIES = [
     {
@@ -83,27 +82,12 @@ var Game = (function () {
     },
   ];
 
-  function _mpWordDifficulty() {
-    var wc = state.wordCount;
-    if (wc < 5) return "easy";
-    if (wc < 12) return "medium";
-    return "hard";
-  }
-
-  function _getMpWord() {
-    var diff = _mpWordDifficulty();
-    if (diff === "easy") return Words.getEasy();
-    if (diff === "medium") return Words.getMedium();
-    return Words.getHard();
-  }
-
   function _resetState(mode, skin, firstWord) {
     state.mode = mode;
     state.skin = skin || "default";
     state.wave = 1;
     state.score = 0;
     state.playerHp = PLAYER_MAX_HP;
-    state._myHp = PLAYER_MAX_HP;
     state.maxPlayerHp = PLAYER_MAX_HP;
     state.combo = 0;
     state.maxCombo = 0;
@@ -203,12 +187,6 @@ var Game = (function () {
     var zone = document.getElementById("enemyZone");
     if (zone) zone.innerHTML = "";
     state.enemies = [];
-
-    if (state.multiplayer) {
-      nextWord();
-      return;
-    }
-
     var waveMap = {
       1: [ENEMIES[0]],
       2: [ENEMIES[0]],
@@ -241,7 +219,7 @@ var Game = (function () {
     });
     var wd = document.getElementById("waveDisplay");
     if (wd) wd.textContent = "W" + state.wave;
-    spawnBots();
+    if (state.mode === "solo") spawnBots();
     nextWord();
   }
 
@@ -353,26 +331,27 @@ var Game = (function () {
   function _applyDamageToSelf(dmg, fromEnemy) {
     if (!state.running && !state._eliminated) return;
     state.playerHp = Math.max(0, state.playerHp - dmg);
-    state._myHp = state.playerHp;
     renderHpBars();
     if (fromEnemy) {
       Effects.damageFlash();
       GameAudio.playerHit();
     }
-    _flushMyHp();
+    _schedulePushHp();
     if (state.playerHp <= 0 && !state._eliminated) {
       if (state.multiplayer) _handleMpDeath();
       else endGame(false);
     }
   }
 
-  function _flushMyHp() {
+  function _schedulePushHp() {
     if (!state.multiplayer) return;
     clearTimeout(state._hpPushTimer);
     state._hpPushTimer = setTimeout(function () {
       var hp = Math.max(0, Math.ceil(state.playerHp));
-      state._lastHpPushed = hp;
-      Multiplayer.pushMyHp(hp);
+      if (hp !== state._lastHpPushed) {
+        state._lastHpPushed = hp;
+        Multiplayer.pushMyHp(hp);
+      }
     }, HP_PUSH_THROTTLE);
   }
 
@@ -381,8 +360,6 @@ var Game = (function () {
     state._eliminated = true;
     state.running = false;
     _stopAllTimers();
-    clearTimeout(state._hpPushTimer);
-
     var inp = document.getElementById("gameInput");
     if (inp) {
       inp.disabled = true;
@@ -399,9 +376,9 @@ var Game = (function () {
       wp.style.opacity = "0.3";
       wp.style.pointerEvents = "none";
     }
-
+    state._lastHpPushed = 0;
     Multiplayer.pushMyHp(0);
-    Effects.showToast("KAU GUGUR! Menunggu hasil akhir...", "error", 4000);
+    Effects.showToast("KAU GUGUR! Menunggu hasil akhir...", "error", 3000);
   }
 
   function _finishMp(iWon, winnerId, allPlayers) {
@@ -412,11 +389,21 @@ var Game = (function () {
     _stopAllTimers();
 
     var myId = Multiplayer.getPlayerId();
-    var me = allPlayers.find(function (p) {
-      return p.id === myId;
+    var playersForResult = allPlayers.map(function (p) {
+      var isMe = p.id === myId;
+      return {
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+        hp: isMe
+          ? state._eliminated
+            ? 0
+            : Math.max(0, Math.ceil(state.playerHp))
+          : Math.max(0, Math.ceil(typeof p.hp === "number" ? p.hp : 0)),
+        wpm: p.wpm || 0,
+        eliminated: p.eliminated || false,
+      };
     });
-    if (me)
-      me.hp = state._eliminated ? 0 : Math.max(0, Math.ceil(state.playerHp));
 
     GameAudio.stopBgm(true);
     if (iWon) GameAudio.victory();
@@ -430,21 +417,18 @@ var Game = (function () {
         maxCombo: state.maxCombo,
         score: state.score,
         mpWinner: winnerId,
-        mpPlayers: allPlayers,
+        mpPlayers: playersForResult,
       });
-    }, 500);
+    }, 600);
   }
 
   function nextWord() {
     state._botCompleted = false;
     state._bots.forEach(clearInterval);
     state._bots = [];
-
     if (state._firstWord) {
       state.currentWord = state._firstWord;
       state._firstWord = null;
-    } else if (state.multiplayer) {
-      state.currentWord = _getMpWord();
     } else {
       var hasBoss = state.enemies.some(function (e) {
         return e.isBoss;
@@ -459,7 +443,6 @@ var Game = (function () {
         state.currentWord = Words.getByWave(state.wave);
       }
     }
-
     state.typedIndex = 0;
     renderWord();
     var inp = document.getElementById("gameInput");
@@ -565,19 +548,14 @@ var Game = (function () {
       GameAudio.keyError();
       Effects.screenShake(3, 120);
       if (inputEl) {
-        inputEl.classList.add("wrong-char");
+        var v = inputEl.value;
+        inputEl.value = "";
         setTimeout(function () {
-          inputEl.classList.remove("wrong-char");
-        }, 200);
+          if (inputEl.value === "") inputEl.value = v.slice(0, -1);
+        }, 0);
+        inputEl.classList.add("shake");
         setTimeout(function () {
-          inputEl.value = "";
-        }, 40);
-      }
-      var chw = document.querySelector('[data-i="' + state.typedIndex + '"]');
-      if (chw) {
-        chw.className = "char wrong";
-        setTimeout(function () {
-          if (chw.className === "char wrong") chw.className = "char active";
+          inputEl.classList.remove("shake");
         }, 280);
       }
       _applyDamageToSelf(2, false);
@@ -597,35 +575,27 @@ var Game = (function () {
     GameAudio.comboUp(state.combo);
     updateCombo();
     if (state.wordCount % 3 === 0) unlockSkill();
-
     var mult = state.skills.overdrive.active ? 2 : 1;
     var comboDmg = Math.min(state.combo, 12) * 2;
+    var baseDmg = 20 + comboDmg;
 
     if (state.multiplayer) {
       var myId = Multiplayer.getPlayerId();
-      var allPl = Multiplayer.getPlayers();
-      var opponents = allPl.filter(function (p) {
-        return p.id !== myId && (p.hp || 0) > 0;
+      var opponents = Multiplayer.getPlayers().filter(function (p) {
+        return p.id !== myId && (p.hp || 0) > 0 && !p.eliminated;
       });
-
       if (opponents.length > 0) {
         var oppDmg = Math.floor((18 + comboDmg) * mult);
         opponents.forEach(function (opp) {
-          var newHp = Math.max(0, (opp.hp || 0) - oppDmg);
-          Multiplayer.dealDamageToOpponent(opp.id, oppDmg);
+          Multiplayer.sendDamageEvent(opp.id, oppDmg);
         });
-        Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1200);
+        Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
       }
-
       var healAmt = 6 + Math.min(state.combo - 1, 6) * 2;
       state.playerHp = Math.min(state.maxPlayerHp, state.playerHp + healAmt);
-      state._myHp = state.playerHp;
       renderHpBars();
-      _flushMyHp();
-
-      setTimeout(nextWord, 180);
+      _schedulePushHp();
     } else {
-      var baseDmg = 20 + comboDmg;
       var alive = state.enemies.filter(function (e) {
         return e.hp > 0;
       });
@@ -645,8 +615,8 @@ var Game = (function () {
         onWaveClear();
         return;
       }
-      setTimeout(nextWord, 180);
     }
+    setTimeout(nextWord, 180);
   }
 
   function dmgEnemy(e, amount) {
@@ -869,7 +839,6 @@ var Game = (function () {
     state._endingMp = false;
     state._gameOverHandled = false;
     state._lastHpPushed = PLAYER_MAX_HP;
-    state._myHp = PLAYER_MAX_HP;
     var sb = document.getElementById("mpSidebar");
     if (sb) sb.style.display = "block";
 
@@ -938,7 +907,7 @@ var Game = (function () {
               : hp > 0
                 ? "var(--r)"
                 : "#444";
-        var dead = hp <= 0 ? " 💀" : "";
+        var dead = hp <= 0 || p.eliminated ? " 💀" : "";
         return (
           '<div class="mp-prow" style="' +
           (hp <= 0 ? "opacity:0.4;" : "") +
@@ -1014,14 +983,14 @@ var Game = (function () {
             Math.ceil(typeof p.hp === "number" ? p.hp : PLAYER_MAX_HP),
           );
           var oPct = Math.max(0, Math.min(100, (oh / PLAYER_MAX_HP) * 100));
-          var oStyle = oh <= 0 ? "opacity:0.4;" : "";
+          var isDead = oh <= 0 || p.eliminated;
           html +=
             '<div class="hpbar" style="' +
-            oStyle +
+            (isDead ? "opacity:0.4;" : "") +
             '">' +
             '<div class="hpbar-row"><span class="hpbar-name">' +
             p.name +
-            (oh <= 0 ? " 💀" : "") +
+            (isDead ? " 💀" : "") +
             '</span><span class="hpbar-val">' +
             oh +
             "/" +
@@ -1122,3 +1091,4 @@ var Game = (function () {
     setupMultiplayer,
   };
 })();
+s

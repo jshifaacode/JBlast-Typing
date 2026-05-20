@@ -16,13 +16,13 @@ var Multiplayer = (function () {
   var _lastGameOver = "";
   var _lastRematchSig = "";
   var _lastPlayerSnap = "";
-  var _lastVoteSnap = "";
-  var _lastDmgSnap = "";
   var _processedEvents = {};
-  var _processedDmg = {};
   var _rematchStarted = false;
   var _doingRematch = false;
   var _gameOverBroadcasted = false;
+  var _pendingDamage = {};
+  var _damageFlushTimer = null;
+  var _heartbeatInterval = null;
 
   function genCode() {
     var c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
@@ -30,7 +30,6 @@ var Multiplayer = (function () {
     for (var i = 0; i < 5; i++) r += c[Math.floor(Math.random() * c.length)];
     return r;
   }
-
   function genId() {
     return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
   }
@@ -60,7 +59,6 @@ var Multiplayer = (function () {
         return null;
       });
   }
-
   function dbGet(p) {
     return _req(p);
   }
@@ -81,13 +79,13 @@ var Multiplayer = (function () {
     _lastGameOver = "";
     _lastRematchSig = "";
     _lastPlayerSnap = "";
-    _lastVoteSnap = "";
-    _lastDmgSnap = "";
     _processedEvents = {};
-    _processedDmg = {};
     _rematchStarted = false;
     _doingRematch = false;
     _gameOverBroadcasted = false;
+    _pendingDamage = {};
+    clearTimeout(_damageFlushTimer);
+    _damageFlushTimer = null;
   }
 
   function stopPoll() {
@@ -95,24 +93,28 @@ var Multiplayer = (function () {
       clearInterval(_poll);
       _poll = null;
     }
+    if (_heartbeatInterval) {
+      clearInterval(_heartbeatInterval);
+      _heartbeatInterval = null;
+    }
   }
 
+  var _AVATARS = {
+    BOLT: '<i class="fa-solid fa-bolt"></i>',
+    SKULL: '<i class="fa-solid fa-skull"></i>',
+    FIRE: '<i class="fa-solid fa-fire"></i>',
+    ALIEN: '<i class="fa-solid fa-user-secret"></i>',
+    ROBOT: '<i class="fa-solid fa-robot"></i>',
+    SHIELD: '<i class="fa-solid fa-shield-halved"></i>',
+    DNA: '<i class="fa-solid fa-dna"></i>',
+    BURST: '<i class="fa-solid fa-burst"></i>',
+    SATELLITE: '<i class="fa-solid fa-satellite"></i>',
+    GEM: '<i class="fa-solid fa-gem"></i>',
+    TORNADO: '<i class="fa-solid fa-tornado"></i>',
+    SWORD: '<i class="fa-solid fa-khanda"></i>',
+  };
   function _renderAvatar(av) {
-    var map = {
-      BOLT: '<i class="fa-solid fa-bolt"></i>',
-      SKULL: '<i class="fa-solid fa-skull"></i>',
-      FIRE: '<i class="fa-solid fa-fire"></i>',
-      ALIEN: '<i class="fa-solid fa-user-secret"></i>',
-      ROBOT: '<i class="fa-solid fa-robot"></i>',
-      SHIELD: '<i class="fa-solid fa-shield-halved"></i>',
-      DNA: '<i class="fa-solid fa-dna"></i>',
-      BURST: '<i class="fa-solid fa-burst"></i>',
-      SATELLITE: '<i class="fa-solid fa-satellite"></i>',
-      GEM: '<i class="fa-solid fa-gem"></i>',
-      TORNADO: '<i class="fa-solid fa-tornado"></i>',
-      SWORD: '<i class="fa-solid fa-khanda"></i>',
-    };
-    return map[av] || '<i class="fa-solid fa-user-astronaut"></i>';
+    return _AVATARS[av] || '<i class="fa-solid fa-user-astronaut"></i>';
   }
 
   function _entry(p) {
@@ -126,6 +128,8 @@ var Multiplayer = (function () {
       progress: 0,
       ready: true,
       online: true,
+      eliminated: false,
+      lastSeen: Date.now(),
     };
   }
 
@@ -135,7 +139,6 @@ var Multiplayer = (function () {
     if (grid) {
       grid.innerHTML = list
         .map(function (p) {
-          var isMe = p.id === pid;
           return (
             '<div class="lpc ready">' +
             '<div class="lpc-avatar">' +
@@ -143,7 +146,7 @@ var Multiplayer = (function () {
             "</div>" +
             '<div class="lpc-name bb">' +
             p.name +
-            (isMe ? " (YOU)" : "") +
+            (p.id === pid ? " (YOU)" : "") +
             "</div>" +
             '<div class="lpc-status" style="color:var(--g)">READY</div></div>'
           );
@@ -171,57 +174,86 @@ var Multiplayer = (function () {
     if (!isHost || !room) return;
     if (_gameOverBroadcasted) return;
     if (_lastStatus !== "playing") return;
-
     var allP = Object.values(fp || players);
     if (allP.length < MIN_PLAYERS) return;
-
     var alive = allP.filter(function (p) {
-      return (p.hp || 0) > 0;
+      return (p.hp || 0) > 0 && !p.eliminated;
     });
-
     if (alive.length <= 1) {
       _gameOverBroadcasted = true;
       var winnerId = alive.length === 1 ? alive[0].id : null;
       var val = winnerId || "none";
       _lastGameOver = val;
-      dbUpd("rooms/" + room, { gameOver: val, status: "ended" });
+      var updates = { gameOver: val, status: "ended", gameOverAt: Date.now() };
+      allP.forEach(function (p) {
+        var finalHp =
+          p.eliminated || (p.hp || 0) <= 0
+            ? 0
+            : Math.max(0, Math.ceil(p.hp || 0));
+        updates["players/" + p.id + "/hp"] = finalHp;
+        if (finalHp <= 0) updates["players/" + p.id + "/eliminated"] = true;
+      });
+      dbUpd("rooms/" + room, updates);
     }
   }
 
-  function _hostApplyDamage(dmgEvents) {
+  function _applyHostDamage(targetId, damage) {
     if (!isHost || !room) return;
-    var now = Date.now();
-    var changed = false;
-    Object.keys(dmgEvents).forEach(function (k) {
-      var ev = dmgEvents[k];
-      if (!ev || !ev.ts || !ev.targetId || !ev.amount) return;
-      if (now - ev.ts > 8000) return;
-      if (_processedDmg[k]) return;
-      _processedDmg[k] = true;
-      var target = players[ev.targetId];
-      if (!target) return;
-      var newHp = Math.max(0, (target.hp || 0) - ev.amount);
-      target.hp = newHp;
-      changed = true;
-    });
-    if (!changed) return;
+    if (!_pendingDamage[targetId]) _pendingDamage[targetId] = 0;
+    _pendingDamage[targetId] += damage;
+    clearTimeout(_damageFlushTimer);
+    _damageFlushTimer = setTimeout(_flushHostDamage, 60);
+  }
+
+  function _flushHostDamage() {
+    if (!isHost || !room || Object.keys(_pendingDamage).length === 0) return;
     var updates = {};
-    Object.keys(players).forEach(function (id) {
-      updates["players/" + id + "/hp"] = players[id].hp;
+    var needsWinCheck = false;
+    Object.keys(_pendingDamage).forEach(function (targetId) {
+      var dmg = _pendingDamage[targetId];
+      if (!players[targetId]) return;
+      if (players[targetId].eliminated || (players[targetId].hp || 0) <= 0)
+        return;
+      var curHp =
+        typeof players[targetId].hp === "number"
+          ? players[targetId].hp
+          : PLAYER_MAX_HP;
+      var newHp = Math.max(0, curHp - dmg);
+      players[targetId].hp = newHp;
+      updates["players/" + targetId + "/hp"] = newHp;
+      if (newHp <= 0 && !players[targetId].eliminated) {
+        players[targetId].eliminated = true;
+        updates["players/" + targetId + "/eliminated"] = true;
+        needsWinCheck = true;
+      }
     });
+    _pendingDamage = {};
+    if (Object.keys(updates).length === 0) return;
     dbUpd("rooms/" + room, updates).then(function () {
-      dbGet("rooms/" + room + "/players").then(function (fp) {
-        if (fp) {
-          players = fp;
-          _checkAndBroadcastWinner(fp);
-        }
-      });
+      if (needsWinCheck) {
+        dbGet("rooms/" + room + "/players").then(function (fp) {
+          if (fp) {
+            players = fp;
+            _checkAndBroadcastWinner(fp);
+          }
+        });
+      }
     });
-    dbSet("rooms/" + room + "/dmgEvents", null);
+  }
+
+  function _startHeartbeat() {
+    if (!isHost || !room) return;
+    if (_heartbeatInterval) clearInterval(_heartbeatInterval);
+    _heartbeatInterval = setInterval(function () {
+      if (!room || !isHost) return;
+      dbSet("rooms/" + room + "/hostHeartbeat", Date.now());
+    }, 3000);
   }
 
   function startPoll(code) {
     stopPoll();
+    if (isHost) _startHeartbeat();
+
     _poll = setInterval(function () {
       dbGet("rooms/" + code).then(function (r) {
         if (!r) return;
@@ -235,15 +267,7 @@ var Multiplayer = (function () {
           _updateLobbyUI();
           if (_lastStatus === "playing") {
             emit("hp_sync", { players: Object.values(players) });
-          }
-        }
-
-        var dmgEvs = r.dmgEvents || {};
-        var dmgSnap = JSON.stringify(dmgEvs);
-        if (dmgSnap !== _lastDmgSnap && Object.keys(dmgEvs).length > 0) {
-          _lastDmgSnap = dmgSnap;
-          if (isHost && _lastStatus === "playing") {
-            _hostApplyDamage(dmgEvs);
+            if (isHost) _checkAndBroadcastWinner(fp);
           }
         }
 
@@ -255,9 +279,7 @@ var Multiplayer = (function () {
           _rematchStarted = false;
           _doingRematch = false;
           _processedEvents = {};
-          _processedDmg = {};
-          _lastVoteSnap = "";
-          _lastDmgSnap = "";
+          _pendingDamage = {};
           if (r.currentWord) {
             emit("game_start", {
               word: r.currentWord,
@@ -279,9 +301,7 @@ var Multiplayer = (function () {
           _rematchStarted = false;
           _doingRematch = false;
           _processedEvents = {};
-          _processedDmg = {};
-          _lastVoteSnap = "";
-          _lastDmgSnap = "";
+          _pendingDamage = {};
           emit("rematch_start", {
             word: r.rematchWord,
             players: Object.values(players),
@@ -301,13 +321,9 @@ var Multiplayer = (function () {
         }
 
         var rv = r.rematchVotes || {};
-        var vSnap = JSON.stringify(rv);
-        if (vSnap !== _lastVoteSnap) {
-          _lastVoteSnap = vSnap;
-          var pIds = Object.keys(players);
-          if (pIds.length >= MIN_PLAYERS && Object.keys(rv).length > 0) {
-            _handleRematchVotes(rv, pIds);
-          }
+        var pIds = Object.keys(players);
+        if (pIds.length >= MIN_PLAYERS && Object.keys(rv).length > 0) {
+          _handleRematchVotes(rv, pIds);
         }
 
         var evs = r.events || {};
@@ -315,11 +331,21 @@ var Multiplayer = (function () {
         Object.keys(evs).forEach(function (k) {
           var ev = evs[k];
           if (!ev || !ev.ts) return;
-          if (now - ev.ts > 5000) return;
+          if (now - ev.ts > 6000) return;
           if (_processedEvents[k]) return;
           _processedEvents[k] = true;
+
           if (ev.type === "typing" && ev.from !== pid) {
             emit("player_typing", { playerId: ev.from, name: ev.name });
+          }
+          if (
+            ev.type === "damage" &&
+            isHost &&
+            ev.from !== pid &&
+            ev.target &&
+            ev.amount > 0
+          ) {
+            _applyHostDamage(ev.target, ev.amount);
           }
         });
       });
@@ -381,10 +407,11 @@ var Multiplayer = (function () {
       rematchWord: "",
       rematchStartedAt: 0,
       gameOver: "",
+      gameOverAt: 0,
       events: {},
-      dmgEvents: {},
       rematchVotes: {},
       players: {},
+      hostHeartbeat: Date.now(),
     };
     data.players[pid] = _entry(p);
     return dbSet("rooms/" + code, data).then(function () {
@@ -437,47 +464,47 @@ var Multiplayer = (function () {
       Effects.showToast("Butuh minimal " + MIN_PLAYERS + " pemain!", "error");
       return Promise.resolve();
     }
+    _lastStatus = "playing";
     _lastGameOver = "";
     _lastRematchSig = "";
     _processedEvents = {};
-    _processedDmg = {};
     _gameOverBroadcasted = false;
-    _lastVoteSnap = "";
-    _lastDmgSnap = "";
-    var word = Words.getEasy();
+    _pendingDamage = {};
+    var word = Words.getByWave(1);
     var updates = {
       status: "playing",
       currentWord: word,
       rematchWord: "",
       rematchStartedAt: 0,
       gameOver: "",
+      gameOverAt: 0,
       rematchVotes: null,
       startedAt: Date.now(),
       events: {},
-      dmgEvents: {},
     };
     list.forEach(function (p) {
       updates["players/" + p.id + "/hp"] = PLAYER_MAX_HP;
       updates["players/" + p.id + "/wpm"] = 0;
       updates["players/" + p.id + "/progress"] = 0;
+      updates["players/" + p.id + "/eliminated"] = false;
       if (players[p.id]) {
         players[p.id].hp = PLAYER_MAX_HP;
         players[p.id].wpm = 0;
         players[p.id].progress = 0;
+        players[p.id].eliminated = false;
       }
     });
-    _lastStatus = "playing";
-    return dbUpd("rooms/" + room, updates);
+    return dbUpd("rooms/" + room, updates).then(function () {
+      emit("game_start", { word: word, players: Object.values(players) });
+    });
   }
 
   function startRematch() {
     if (!isHost || !room) return Promise.resolve();
     _processedEvents = {};
-    _processedDmg = {};
     _gameOverBroadcasted = false;
-    _lastVoteSnap = "";
-    _lastDmgSnap = "";
-    var word = Words.getEasy();
+    _pendingDamage = {};
+    var word = Words.getByWave(1);
     var ts = Date.now();
     return dbGet("rooms/" + room + "/players").then(function (fp) {
       var allP = fp || players;
@@ -487,26 +514,30 @@ var Multiplayer = (function () {
         rematchWord: word,
         rematchStartedAt: ts,
         gameOver: "",
+        gameOverAt: 0,
         rematchVotes: null,
         startedAt: ts,
         events: {},
-        dmgEvents: {},
       };
       Object.keys(allP).forEach(function (id) {
         updates["players/" + id + "/hp"] = PLAYER_MAX_HP;
         updates["players/" + id + "/wpm"] = 0;
         updates["players/" + id + "/progress"] = 0;
+        updates["players/" + id + "/eliminated"] = false;
         if (players[id]) {
           players[id].hp = PLAYER_MAX_HP;
           players[id].wpm = 0;
           players[id].progress = 0;
+          players[id].eliminated = false;
         }
       });
       _lastStatus = "playing";
       _lastGameOver = "";
       _lastRematchSig = word + "|" + ts;
       _doingRematch = false;
-      return dbUpd("rooms/" + room, updates);
+      return dbUpd("rooms/" + room, updates).then(function () {
+        emit("rematch_start", { word: word, players: Object.values(players) });
+      });
     });
   }
 
@@ -522,25 +553,18 @@ var Multiplayer = (function () {
     if (!room || !pid) return Promise.resolve();
     var safe = Math.max(0, Math.min(PLAYER_MAX_HP, Math.ceil(hp)));
     if (players[pid]) players[pid].hp = safe;
-    return dbSet("rooms/" + room + "/players/" + pid + "/hp", safe).then(
+    var updates = { hp: safe };
+    if (safe <= 0) {
+      updates.eliminated = true;
+      if (players[pid]) players[pid].eliminated = true;
+    }
+    return dbUpd("rooms/" + room + "/players/" + pid, updates).then(
       function () {
-        if (safe === 0 && isHost) {
+        if (safe <= 0 && isHost) {
           dbGet("rooms/" + room + "/players").then(function (fp) {
             if (fp) {
               players = fp;
               _checkAndBroadcastWinner(fp);
-            }
-          });
-        } else if (safe === 0 && !isHost) {
-          dbGet("rooms/" + room + "/players").then(function (fp) {
-            if (fp) {
-              players = fp;
-              var alive = Object.values(fp).filter(function (p) {
-                return (p.hp || 0) > 0;
-              });
-              if (alive.length <= 1) {
-                broadcastGameOver(alive.length === 1 ? alive[0].id : null);
-              }
             }
           });
         }
@@ -560,6 +584,23 @@ var Multiplayer = (function () {
     });
   }
 
+  function sendDamageEvent(targetId, amount) {
+    if (!room || !pid || !targetId || amount <= 0) return Promise.resolve();
+    if (isHost) {
+      _applyHostDamage(targetId, amount);
+      return Promise.resolve();
+    }
+    var id =
+      Date.now().toString(36) + "_d_" + Math.random().toString(36).substr(2, 5);
+    return dbSet("rooms/" + room + "/events/" + id, {
+      type: "damage",
+      from: pid,
+      target: targetId,
+      amount: amount,
+      ts: Date.now(),
+    });
+  }
+
   function sendTyping() {
     if (!room || !pid) return Promise.resolve();
     var id = Date.now().toString(36) + "_t";
@@ -571,24 +612,17 @@ var Multiplayer = (function () {
     });
   }
 
-  function dealDamageToOpponent(targetId, amount) {
-    if (!room || !pid) return Promise.resolve();
-    var evId = pid + "_" + Date.now().toString(36);
-    return dbSet("rooms/" + room + "/dmgEvents/" + evId, {
-      from: pid,
-      targetId: targetId,
-      amount: amount,
-      ts: Date.now(),
-    });
-  }
-
   function broadcastGameOver(winnerId) {
     if (!room) return Promise.resolve();
     var val = winnerId || "none";
     if (_lastGameOver === val) return Promise.resolve();
     _gameOverBroadcasted = true;
     _lastGameOver = val;
-    return dbUpd("rooms/" + room, { gameOver: val, status: "ended" });
+    return dbUpd("rooms/" + room, {
+      gameOver: val,
+      status: "ended",
+      gameOverAt: Date.now(),
+    });
   }
 
   function leaveRoom() {
@@ -649,7 +683,7 @@ var Multiplayer = (function () {
     voteRematch,
     pushMyHp,
     pushMyProgress,
-    dealDamageToOpponent,
+    sendDamageEvent,
     sendTyping,
     broadcastGameOver,
     leaveRoom,
