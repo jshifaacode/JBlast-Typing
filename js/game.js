@@ -417,10 +417,8 @@ var Game = (function () {
     clearTimeout(state._hpPushTimer);
     state._hpPushTimer = setTimeout(function () {
       var hp = Math.max(0, Math.ceil(state.playerHp));
-      if (hp !== state._lastHpPushed) {
-        state._lastHpPushed = hp;
-        Multiplayer.pushMyHp(hp);
-      }
+      state._lastHpPushed = hp;
+      Multiplayer.pushMyHp(hp);
     }, HP_PUSH_THROTTLE);
   }
 
@@ -453,10 +451,19 @@ var Game = (function () {
     _enableWordPanel();
 
     var myId = Multiplayer.getPlayerId();
-    var updatedPlayers = allPlayers.map(function (p) {
+
+    // Get best available player list
+    var sourcePlayers =
+      allPlayers && allPlayers.length > 0
+        ? allPlayers
+        : Multiplayer.getPlayers();
+    if (sourcePlayers.length === 0) sourcePlayers = Multiplayer.getPlayers();
+
+    var updatedPlayers = sourcePlayers.map(function (p) {
       if (p.id === myId) {
         return Object.assign({}, p, {
           hp: state.isEliminated ? 0 : Math.max(0, Math.ceil(state.playerHp)),
+          wpm: calcWpm(),
         });
       }
       return p;
@@ -470,6 +477,15 @@ var Game = (function () {
     if (iWon) GameAudio.victory();
     else GameAudio.defeat();
 
+    _log(
+      "Showing result: iWon=" +
+        iWon +
+        " winner=" +
+        winnerId +
+        " players=" +
+        updatedPlayers.length,
+    );
+
     setTimeout(function () {
       UI.showResult({
         victory: iWon,
@@ -480,7 +496,7 @@ var Game = (function () {
         mpWinner: winnerId,
         mpPlayers: updatedPlayers,
       });
-    }, 500);
+    }, 600);
   }
 
   function nextWord() {
@@ -680,22 +696,22 @@ var Game = (function () {
       var opponents = Multiplayer.getPlayers().filter(function (p) {
         return p.id !== myId && (p.hp || 0) > 0 && !p.eliminated;
       });
-      if (opponents.length > 0 && Multiplayer.getIsHost()) {
+      if (opponents.length > 0) {
         var oppDmg = Math.floor((18 + comboDmg) * mult);
-        opponents.forEach(function (opp) {
-          var newHp = Math.max(0, (opp.hp || 0) - oppDmg);
-          Multiplayer.pushOpponentHp(opp.id, newHp);
-        });
+        if (Multiplayer.getIsHost()) {
+          // Host applies damage directly
+          opponents.forEach(function (opp) {
+            var newHp = Math.max(0, (opp.hp || 0) - oppDmg);
+            Multiplayer.pushOpponentHp(opp.id, newHp);
+          });
+        } else {
+          // Non-host sends damage request event; host will apply it
+          opponents.forEach(function (opp) {
+            Multiplayer.sendDamageRequest(opp.id, oppDmg);
+          });
+        }
         Effects.showToast("Serang lawan! -" + oppDmg + " HP", "warning", 1400);
         renderHpBars();
-      } else if (opponents.length > 0) {
-        var oppDmgNonHost = Math.floor((18 + comboDmg) * mult);
-        Effects.showToast(
-          "Serang lawan! -" + oppDmgNonHost + " HP (relay ke host)",
-          "warning",
-          1400,
-        );
-        Multiplayer.pushMyProgress(1, calcWpm());
       }
       var healAmt = 6 + Math.min(state.combo - 1, 6) * 2;
       state.playerHp = Math.min(state.maxPlayerHp, state.playerHp + healAmt);
@@ -995,6 +1011,7 @@ var Game = (function () {
       _log("game_over received: winner=" + data.winnerId);
       var myId = Multiplayer.getPlayerId();
       var iWon = data.winnerId === myId;
+      // Use players from event, fallback to current list
       var allPl =
         data.players && data.players.length > 0
           ? data.players
@@ -1041,6 +1058,22 @@ var Game = (function () {
     });
 
     updateMpSidebar();
+
+    // Safety fallback: if game is still running after timer + 30s, force end
+    setTimeout(
+      function () {
+        if (
+          state.multiplayer &&
+          !state._endingMp &&
+          !state._gameOverHandled &&
+          state.running
+        ) {
+          _log("Safety fallback: forcing game end after timeout");
+          _endMpByTime();
+        }
+      },
+      (MP_DURATION + 35) * 1000,
+    );
   }
 
   function updateMpSidebar() {
