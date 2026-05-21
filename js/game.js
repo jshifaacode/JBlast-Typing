@@ -650,7 +650,7 @@ var Game = (function () {
       Multiplayer.trySubmitAnswer(token).then(function (won) {
         if (!won) {
           Effects.showToast("Lawan lebih cepat!", "warning", 1200);
-          setTimeout(nextWord, 500);
+          nextWord();
           return;
         }
         _applyWordDoneReward();
@@ -730,7 +730,7 @@ var Game = (function () {
         return;
       }
     }
-    setTimeout(nextWord, 180);
+    nextWord();
   }
 
   function dmgEnemy(e, amount) {

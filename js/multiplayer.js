@@ -159,7 +159,7 @@ var Multiplayer = (function () {
 
   function _getAlivePlayers(fp) {
     return Object.values(fp || players).filter(function (p) {
-      return (p.hp || 0) > 0 && !p.eliminated;
+      return (p.hp || 0) > 0 && !p.eliminated && p.id !== undefined;
     });
   }
 
@@ -316,8 +316,21 @@ var Multiplayer = (function () {
             }
           });
 
-          var oldPlayers = players;
-          players = fp;
+          var mergedPlayers = {};
+          Object.keys(fp).forEach(function (id) {
+            var remote = fp[id];
+            var local = players[id];
+            if (id === pid && local && _myHpSeq > 0) {
+              mergedPlayers[id] = Object.assign({}, remote, {
+                hp: local.hp,
+                currentHP: local.currentHP,
+                eliminated: local.eliminated,
+              });
+            } else {
+              mergedPlayers[id] = remote;
+            }
+          });
+          players = mergedPlayers;
 
           if (!_gameStarted) {
             emit("players_update", { players: Object.values(players) });
@@ -325,7 +338,7 @@ var Multiplayer = (function () {
           } else if (!_isMatchEnded) {
             emit("players_update", { players: Object.values(players) });
             if (hpChanged) emit("hp_sync", { players: Object.values(players) });
-            if (isHost) _checkAndBroadcastWinner(fp);
+            if (isHost) _checkAndBroadcastWinner(mergedPlayers);
           }
         }
 
@@ -423,16 +436,35 @@ var Multiplayer = (function () {
 
           if (ev.type === "eliminate" && ev.target) {
             var eTarget = ev.target;
-            if (_eliminationProcessed[eTarget]) return;
-            _eliminationProcessed[eTarget] = true;
-            _log("Eliminate event for: " + eTarget);
             if (players[eTarget]) {
               players[eTarget].hp = 0;
               players[eTarget].eliminated = true;
               players[eTarget].currentHP = 0;
             }
-            emit("player_eliminated", { playerId: eTarget });
-            if (isHost) _checkAndBroadcastWinner(players);
+            if (!_eliminationProcessed[eTarget]) {
+              _eliminationProcessed[eTarget] = true;
+              _log("Eliminate event for: " + eTarget);
+              emit("player_eliminated", { playerId: eTarget });
+            }
+            if (isHost && !_isMatchEnded && !_gameOverBroadcastLock) {
+              _log(
+                "Host re-checking winner after eliminate event for " + eTarget,
+              );
+              dbGet("rooms/" + room + "/players").then(function (freshFp) {
+                if (!freshFp || _isMatchEnded || _gameOverBroadcastLock) return;
+                Object.keys(freshFp).forEach(function (id) {
+                  if (players[id]) {
+                    freshFp[id].hp = Math.min(
+                      freshFp[id].hp || 0,
+                      players[id].hp || 0,
+                    );
+                    if (players[id].eliminated) freshFp[id].eliminated = true;
+                  }
+                });
+                players = freshFp;
+                _checkAndBroadcastWinner(freshFp);
+              });
+            }
           }
 
           if (
