@@ -535,33 +535,34 @@ var Multiplayer = (function () {
     return dbSet("rooms/" + room + "/rematchVotes/" + pid, accept === false ? false : true);
   }
 
-  // Push my own HP to Firebase (authoritative)
+  // Push my own HP to Firebase (CLIENT SHOULD NOT BE AUTHORITATIVE)
+  // In multiplayer we want host to be the single source of truth.
+  // So non-host sends an eliminate request only; host will finalize hp/elimination.
   function pushMyHp(hp) {
     if (!room || !pid) return Promise.resolve();
     var safe = Math.max(0, Math.min(PLAYER_MAX_HP, Math.ceil(hp)));
-    _myHpSeq++;
+
+    // Keep local cache for UI, but don't write authoritative hp to Firebase.
     if (players[pid]) { players[pid].hp = safe; players[pid].eliminated = safe <= 0; }
     _lastHpSnapshot[pid] = safe;
-    _log("Push my HP: " + safe);
-    var updates = { hp: safe, eliminated: safe <= 0 };
-    return dbUpd("rooms/" + room + "/players/" + pid, updates).then(function () {
-      if (safe === 0 && !_isMatchEnded) {
+
+    // Only when we reach 0: ask host to eliminate us.
+    if (safe === 0 && !_isMatchEnded) {
+      // Avoid spamming eliminate events
+      if (_eliminationProcessed[pid + "_client_req"]) return Promise.resolve();
+      _eliminationProcessed[pid + "_client_req"] = true;
+
+      if (!isHost) {
         var eKey = Date.now().toString(36) + "_e";
         return dbSet("rooms/" + room + "/events/" + eKey, {
           type: "eliminate", target: pid, from: pid, ts: Date.now()
-        }).then(function () {
-          if (isHost) {
-            return dbGet("rooms/" + room + "/players").then(function (freshFp) {
-              if (!freshFp) return;
-              players = Object.assign({}, players, freshFp);
-              if (players[pid]) { players[pid].hp = 0; players[pid].eliminated = true; }
-              _checkAndBroadcastWinner(players);
-            });
-          }
         });
       }
-    });
+    }
+
+    return Promise.resolve();
   }
+
 
   // HOST ONLY: push HP of another player
   function pushHp(targetId, hp) {

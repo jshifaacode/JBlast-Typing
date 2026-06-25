@@ -407,8 +407,21 @@ var Game = (function () {
     }
     _schedulePushHp();
     if (state.playerHp <= 0 && !state.isEliminated) {
-      if (state.multiplayer) _handleMpDeath();
-      else endGame(false);
+      // multiplayer: client TIDAK memfinalisasi death sendiri.
+      // Client cukup mengunci visual lokal; final outcome menunggu host.
+      if (state.multiplayer) {
+        // Mark eliminated locally to stop local combat loops,
+        // tapi jangan lock sampai host kirim elimination/game_over final.
+        state.isEliminated = true;
+        state.running = false;
+        _stopAllTimers();
+        _lockAllInput();
+        _disableWordPanel();
+        // Inform host bahwa HP lokal sudah 0 (akan mengeluarkan eliminate final)
+        Multiplayer.pushMyHp(0);
+      } else {
+        endGame(false);
+      }
     }
   }
 
@@ -423,7 +436,10 @@ var Game = (function () {
   }
 
   function _handleMpDeath() {
-    if (state.isEliminated || state.isMatchEnded) return;
+    // Dipertahankan untuk kompatibilitas, tapi dalam multiplayer sekarang
+    // death final ditentukan oleh host melalui Firebase game_over/elimination.
+    if (state.isMatchEnded) return;
+    if (state.isEliminated) return;
     state.isEliminated = true;
     state.running = false;
     _stopAllTimers();
@@ -438,6 +454,7 @@ var Game = (function () {
         '<div style="text-align:center;padding:40px;color:var(--r);font-family:var(--f);font-size:22px;">💀 ELIMINATED<br><span style="font-size:14px;color:var(--t3);">Menunggu pertandingan selesai...</span></div>';
     }
   }
+
 
   function _finishMp(iWon, winnerId, allPlayers) {
     if (state._endingMp) return;

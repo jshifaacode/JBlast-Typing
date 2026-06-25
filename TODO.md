@@ -1,0 +1,6 @@
+- [x] Update multiplayer to single-authoritative host (HP/elimination/game_over)
+- [x] Disable local final elimination UI in multiplayer (client waits for Firebase final)
+- [ ] Add matchId/roundEpoch to ignore stale events
+- [x] Remove non-host HP writes; convert to eliminate_request only
+- [ ] Make winner resolution single-source on host
+- [ ] Sanity test: 2-4 devices, HP consistency, game over一致, no stuck
